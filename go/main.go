@@ -63,10 +63,10 @@ const (
 )
 
 var (
-	templates *template.Template
-	dbx       *sqlx.DB
-	store     sessions.Store
-	categoryCache	map[int]Category
+	templates     *template.Template
+	dbx           *sqlx.DB
+	store         sessions.Store
+	categoryCache map[int]Category
 )
 
 type Config struct {
@@ -418,7 +418,7 @@ func getCategoryByID(categoryID int) (category Category, err error) {
 	if category.ID == 0 {
 		return category, errors.New("nothing category")
 	}
- 	// err = sqlx.Get(q, &category, "SELECT * FROM `categories` WHERE `id` = ?", categoryID)
+	// err = sqlx.Get(q, &category, "SELECT * FROM `categories` WHERE `id` = ?", categoryID)
 	if category.ParentID != 0 {
 		parentCategory, err := getCategoryByID(category.ParentID)
 		if err != nil {
