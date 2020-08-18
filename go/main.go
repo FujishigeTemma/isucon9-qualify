@@ -21,6 +21,7 @@ import (
 	goji "goji.io"
 	"goji.io/pat"
 	"golang.org/x/crypto/bcrypt"
+	_ "net/http/pprof"
 )
 
 const (
@@ -303,6 +304,8 @@ func main() {
 	if password == "" {
 		password = "isucari"
 	}
+
+	go http.ListenAndServe(":6060", nil)
 
 	dsn := fmt.Sprintf(
 		"%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=true&loc=Local",
