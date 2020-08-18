@@ -617,12 +617,11 @@ func getNewItems(w http.ResponseWriter, r *http.Request) {
 		//	outputErrorMsg(w, http.StatusNotFound, "seller not found")
 		//	return
 		//}
-		category := categoryCache[item.CategoryID]
-		//category, err := getCategoryByID(item.CategoryID)
-		//if err != nil {
-		//	outputErrorMsg(w, http.StatusNotFound, "category not found")
-		//	return
-		//}
+		category, err := getCategoryByID(item.CategoryID)
+		if err != nil {
+			outputErrorMsg(w, http.StatusNotFound, "category not found")
+			return
+		}
 		itemSimples = append(itemSimples, ItemSimple{
 			ID:         item.ID,
 			SellerID:   item.SellerID,
@@ -759,12 +758,11 @@ func getNewCategoryItems(w http.ResponseWriter, r *http.Request) {
 		//	outputErrorMsg(w, http.StatusNotFound, "seller not found")
 		//	return
 		//}
-		category := categoryCache[item.CategoryID]
-		//category, err := getCategoryByID(item.CategoryID)
-		//if err != nil {
-		//	outputErrorMsg(w, http.StatusNotFound, "category not found")
-		//	return
-		//}
+		category, err := getCategoryByID(item.CategoryID)
+		if err != nil {
+			outputErrorMsg(w, http.StatusNotFound, "category not found")
+			return
+		}
 		itemSimples = append(itemSimples, ItemSimple{
 			ID:         item.ID,
 			SellerID:   item.SellerID,
@@ -871,12 +869,11 @@ func getUserItems(w http.ResponseWriter, r *http.Request) {
 	itemSimples := []ItemSimple{}
 	// TODO: n + 1
 	for _, item := range items {
-		category := categoryCache[item.CategoryID]
-		//category, err := getCategoryByID(item.CategoryID)
-		//if err != nil {
-		//	outputErrorMsg(w, http.StatusNotFound, "category not found")
-		//	return
-		//}
+		category, err := getCategoryByID(item.CategoryID)
+		if err != nil {
+			outputErrorMsg(w, http.StatusNotFound, "category not found")
+			return
+		}
 		itemSimples = append(itemSimples, ItemSimple{
 			ID:         item.ID,
 			SellerID:   item.SellerID,
