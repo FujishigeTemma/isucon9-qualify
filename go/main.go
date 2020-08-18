@@ -325,7 +325,7 @@ func main() {
 	}
 	defer dbx.Close()
 
-	categoryCache = make(map[int]category)
+	categoryCache = make(map[int]Category)
 
 	mux := goji.NewMux()
 
