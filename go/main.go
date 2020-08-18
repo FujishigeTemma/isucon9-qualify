@@ -561,6 +561,7 @@ func getNewItems(w http.ResponseWriter, r *http.Request) {
 	}
 
 	itemSimples := []ItemSimple{}
+	// TODO: 2n + 1
 	for _, item := range items {
 		seller, err := getUserSimpleByID(dbx, item.SellerID)
 		if err != nil {
@@ -689,6 +690,7 @@ func getNewCategoryItems(w http.ResponseWriter, r *http.Request) {
 	}
 
 	itemSimples := []ItemSimple{}
+	// TODO: 2n + 1
 	for _, item := range items {
 		seller, err := getUserSimpleByID(dbx, item.SellerID)
 		if err != nil {
@@ -804,6 +806,7 @@ func getUserItems(w http.ResponseWriter, r *http.Request) {
 	}
 
 	itemSimples := []ItemSimple{}
+	// TODO: n + 1
 	for _, item := range items {
 		category, err := getCategoryByID(dbx, item.CategoryID)
 		if err != nil {
@@ -916,6 +919,7 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	itemDetails := []ItemDetail{}
+	// TODO: 2n + 1
 	for _, item := range items {
 		seller, err := getUserSimpleByID(tx, item.SellerID)
 		if err != nil {
