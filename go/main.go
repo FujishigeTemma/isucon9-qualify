@@ -598,8 +598,8 @@ func getNewItems(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	itemSimples := []ItemSimple{}
-	sellerIds := make([]int64, len(items))
+	itemSimples := make([]ItemSimple, 0, len(items))
+	sellerIds := make([]int64, 0, len(items))
 	for _, item := range items {
 		sellerIds = append(sellerIds, item.SellerID)
 	}
@@ -737,8 +737,8 @@ func getNewCategoryItems(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	itemSimples := []ItemSimple{}
-	sellerIds := make([]int64, len(items))
+	itemSimples := make([]ItemSimple, 0, len(items))
+	sellerIds := make([]int64, 0, len(items))
 	for _, item := range items {
 		sellerIds = append(sellerIds, item.SellerID)
 	}
@@ -975,7 +975,7 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	userIds := make([]int64, len(items))
+	userIds := make([]int64, 0, len(items) * 2)
 	for _, item := range items {
 		userIds = append(userIds, item.SellerID)
 		userIds = append(userIds, item.BuyerID)
@@ -987,7 +987,7 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	itemDetails := []ItemDetail{}
+	itemDetails := make([]ItemDetail, 0, len(items))
 	for _, item := range items {
 		seller := userSimpleMap[item.SellerID]
 		category, err := getCategoryByID(item.CategoryID)
