@@ -600,17 +600,29 @@ func getNewItems(w http.ResponseWriter, r *http.Request) {
 
 	itemSimples := []ItemSimple{}
 	// TODO: 2n + 1
+	sellerIds := make([]int64, len(items))
 	for _, item := range items {
-		seller, err := getUserSimpleByID(dbx, item.SellerID)
-		if err != nil {
-			outputErrorMsg(w, http.StatusNotFound, "seller not found")
-			return
-		}
-		category, err := getCategoryByID(item.CategoryID)
-		if err != nil {
-			outputErrorMsg(w, http.StatusNotFound, "category not found")
-			return
-		}
+		sellerIds = append(sellerIds, item.SellerID)
+	}
+	sellerSimpleMap, err := getUserSimplesByIDs(dbx, sellerIds)
+	if err != nil {
+		outputErrorMsg(w, http.StatusNotFound, "seller or buyer not found")
+		return
+	}
+
+	for _, item := range items {
+		seller := sellerSimpleMap[item.SellerID]
+		//seller, err := getUserSimpleByID(dbx, item.SellerID)
+		//if err != nil {
+		//	outputErrorMsg(w, http.StatusNotFound, "seller not found")
+		//	return
+		//}
+		category := categoryCache[item.CategoryID]
+		//category, err := getCategoryByID(item.CategoryID)
+		//if err != nil {
+		//	outputErrorMsg(w, http.StatusNotFound, "category not found")
+		//	return
+		//}
 		itemSimples = append(itemSimples, ItemSimple{
 			ID:         item.ID,
 			SellerID:   item.SellerID,
@@ -729,6 +741,7 @@ func getNewCategoryItems(w http.ResponseWriter, r *http.Request) {
 
 	itemSimples := []ItemSimple{}
 	// TODO: 2n + 1
+
 	for _, item := range items {
 		seller, err := getUserSimpleByID(dbx, item.SellerID)
 		if err != nil {
