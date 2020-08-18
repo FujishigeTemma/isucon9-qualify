@@ -509,7 +509,7 @@ func postInitialize(w http.ResponseWriter, r *http.Request) {
 		outputErrorMsg(w, http.StatusInternalServerError, "category mem cache error")
 		return
 	}
-	for _, c := range(categories) {
+	for _, c := range categories {
 		categoryCache[c.ID] = c
 	}
 
