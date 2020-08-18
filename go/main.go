@@ -1427,69 +1427,32 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO: 並列
-	var scr *APIShipmentCreateRes
-	var pstr *APIPaymentServiceTokenRes
+	scr, err := APIShipmentCreate(getShipmentServiceURL(), &APIShipmentCreateReq{
+		ToAddress:   buyer.Address,
+		ToName:      buyer.AccountName,
+		FromAddress: seller.Address,
+		FromName:    seller.AccountName,
+	})
+	if err != nil {
+		log.Print(err)
+		outputErrorMsg(w, http.StatusInternalServerError, "failed to request to shipment service")
+		tx.Rollback()
 
-	type ScrStruct struct {
-		scr	*APIShipmentCreateRes
-		err error
+		return
 	}
-	type PstrStruct struct {
-		pstr *APIPaymentServiceTokenRes
-		err	error
-	}
-	scrChan := make(chan ScrStruct)
-	pstrChan := make(chan PstrStruct)
-	go func() {
-		scr, err := APIShipmentCreate(getShipmentServiceURL(), &APIShipmentCreateReq{
-			ToAddress:   buyer.Address,
-			ToName:      buyer.AccountName,
-			FromAddress: seller.Address,
-			FromName:    seller.AccountName,
-		})
-		str := ScrStruct {
-			scr: scr,
-			err: err,
-		}
-		scrChan <- str
-	}()
-	go func() {
-		pstr, err := APIPaymentToken(getPaymentServiceURL(), &APIPaymentServiceTokenReq{
-			ShopID: PaymentServiceIsucariShopID,
-			Token:  rb.Token,
-			APIKey: PaymentServiceIsucariAPIKey,
-			Price:  targetItem.Price,
-		})
-		str := PstrStruct {
-			pstr: pstr,
-			err: err,
-		}
-		pstrChan <- str
-	}()
 
-	for i := 0; i < 2; i++ {
-		select {
-		case str := <- scrChan:
-			scr = str.scr
-			err = str.err
-			if err != nil {
-				log.Print(err)
-				outputErrorMsg(w, http.StatusInternalServerError, "failed to request to shipment service")
-				tx.Rollback()
-				return
-			}
-		case str := <- pstrChan:
-			pstr = str.pstr
-			err = str.err
-			if err != nil {
-				log.Print(err)
-		
-				outputErrorMsg(w, http.StatusInternalServerError, "payment service is failed")
-				tx.Rollback()
-				return
-			}
-		}
+	pstr, err := APIPaymentToken(getPaymentServiceURL(), &APIPaymentServiceTokenReq{
+		ShopID: PaymentServiceIsucariShopID,
+		Token:  rb.Token,
+		APIKey: PaymentServiceIsucariAPIKey,
+		Price:  targetItem.Price,
+	})
+	if err != nil {
+		log.Print(err)
+
+		outputErrorMsg(w, http.StatusInternalServerError, "payment service is failed")
+		tx.Rollback()
+		return
 	}
 
 	if pstr.Status == "invalid" {
