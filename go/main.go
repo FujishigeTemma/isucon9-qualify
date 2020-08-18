@@ -325,6 +325,8 @@ func main() {
 	}
 	defer dbx.Close()
 
+	categories = make(map[int]category)
+
 	mux := goji.NewMux()
 
 	// API
