@@ -599,7 +599,6 @@ func getNewItems(w http.ResponseWriter, r *http.Request) {
 	}
 
 	itemSimples := []ItemSimple{}
-	// TODO: 2n + 1
 	sellerIds := make([]int64, len(items))
 	for _, item := range items {
 		sellerIds = append(sellerIds, item.SellerID)
@@ -739,8 +738,6 @@ func getNewCategoryItems(w http.ResponseWriter, r *http.Request) {
 	}
 
 	itemSimples := []ItemSimple{}
-	// TODO: 2n + 1
-
 	sellerIds := make([]int64, len(items))
 	for _, item := range items {
 		sellerIds = append(sellerIds, item.SellerID)
@@ -867,7 +864,6 @@ func getUserItems(w http.ResponseWriter, r *http.Request) {
 	}
 
 	itemSimples := []ItemSimple{}
-	// TODO: n + 1
 	for _, item := range items {
 		category, err := getCategoryByID(item.CategoryID)
 		if err != nil {
@@ -1050,6 +1046,7 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 				tx.Rollback()
 				return
 			}
+			// TODO: 外部APIからDBへ
 			ssr, err := APIShipmentStatus(getShipmentServiceURL(), &APIShipmentStatusReq{
 				ReserveID: shipping.ReserveID,
 			})
@@ -2265,6 +2262,7 @@ func postLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// TODO: 外に出す
 	err = bcrypt.CompareHashAndPassword(u.HashedPassword, []byte(password))
 	if err == bcrypt.ErrMismatchedHashAndPassword {
 		outputErrorMsg(w, http.StatusUnauthorized, "アカウント名かパスワードが間違えています")
