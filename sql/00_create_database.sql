@@ -8,5 +8,3 @@ GRANT ALL PRIVILEGES ON `isucari`.* TO 'isucari'@'localhost';
 DROP USER IF EXISTS 'isucari'@'%';
 CREATE USER 'isucari'@'%' IDENTIFIED BY 'isucari';
 GRANT ALL PRIVILEGES ON `isucari`.* TO 'isucari'@'%';
-
-SET GLOBAL max_connections = 9999;
