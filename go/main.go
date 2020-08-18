@@ -4,6 +4,7 @@ import (
 	crand "crypto/rand"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html/template"
 	"io/ioutil"
@@ -15,13 +16,14 @@ import (
 	"strconv"
 	"time"
 
+	_ "net/http/pprof"
+
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/gorilla/sessions"
 	"github.com/jmoiron/sqlx"
 	goji "goji.io"
 	"goji.io/pat"
 	"golang.org/x/crypto/bcrypt"
-	_ "net/http/pprof"
 )
 
 const (
@@ -413,7 +415,10 @@ func getUserSimpleByID(q sqlx.Queryer, userID int64) (userSimple UserSimple, err
 
 func getCategoryByID(categoryID int) (category Category, err error) {
 	category = categoryCache[categoryID]
-	// err = sqlx.Get(q, &category, "SELECT * FROM `categories` WHERE `id` = ?", categoryID)
+	if category.ID == 0 {
+		return category, errors.New("nothing category")
+	}
+ 	// err = sqlx.Get(q, &category, "SELECT * FROM `categories` WHERE `id` = ?", categoryID)
 	if category.ParentID != 0 {
 		parentCategory, err := getCategoryByID(category.ParentID)
 		if err != nil {
@@ -501,7 +506,7 @@ func postInitialize(w http.ResponseWriter, r *http.Request) {
 	err = dbx.Select(&categories, "SELECT * FROM `categories`")
 	if err != nil {
 		log.Print(err)
-		outputErrorMsg(w, http.StatusInternalServerError, "db error")
+		outputErrorMsg(w, http.StatusInternalServerError, "category mem cache error")
 		return
 	}
 	for _, c := range(categories) {
