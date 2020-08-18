@@ -411,11 +411,11 @@ func getUserSimpleByID(q sqlx.Queryer, userID int64) (userSimple UserSimple, err
 	return userSimple, err
 }
 
-func getCategoryByID(categoryID int) (category Category, err error) {
+func getCategoryByID(q sqlx.Queryer, categoryID int) (category Category, err error) {
 	category = categoryCache[categoryID]
 	// err = sqlx.Get(q, &category, "SELECT * FROM `categories` WHERE `id` = ?", categoryID)
 	if category.ParentID != 0 {
-		parentCategory, err := getCategoryByID(category.ParentID)
+		parentCategory, err := getCategoryByID(q, category.ParentID)
 		if err != nil {
 			return category, err
 		}
@@ -582,7 +582,7 @@ func getNewItems(w http.ResponseWriter, r *http.Request) {
 			outputErrorMsg(w, http.StatusNotFound, "seller not found")
 			return
 		}
-		category, err := getCategoryByID(item.CategoryID)
+		category, err := getCategoryByID(dbx, item.CategoryID)
 		if err != nil {
 			outputErrorMsg(w, http.StatusNotFound, "category not found")
 			return
@@ -624,7 +624,7 @@ func getNewCategoryItems(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rootCategory, err := getCategoryByID(rootCategoryID)
+	rootCategory, err := getCategoryByID(dbx, rootCategoryID)
 	if err != nil || rootCategory.ParentID != 0 {
 		outputErrorMsg(w, http.StatusNotFound, "category not found")
 		return
@@ -711,7 +711,7 @@ func getNewCategoryItems(w http.ResponseWriter, r *http.Request) {
 			outputErrorMsg(w, http.StatusNotFound, "seller not found")
 			return
 		}
-		category, err := getCategoryByID(item.CategoryID)
+		category, err := getCategoryByID(dbx, item.CategoryID)
 		if err != nil {
 			outputErrorMsg(w, http.StatusNotFound, "category not found")
 			return
@@ -822,7 +822,7 @@ func getUserItems(w http.ResponseWriter, r *http.Request) {
 	itemSimples := []ItemSimple{}
 	// TODO: n + 1
 	for _, item := range items {
-		category, err := getCategoryByID(item.CategoryID)
+		category, err := getCategoryByID(dbx, item.CategoryID)
 		if err != nil {
 			outputErrorMsg(w, http.StatusNotFound, "category not found")
 			return
@@ -941,7 +941,7 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 			tx.Rollback()
 			return
 		}
-		category, err := getCategoryByID(item.CategoryID)
+		category, err := getCategoryByID(tx, item.CategoryID)
 		if err != nil {
 			outputErrorMsg(w, http.StatusNotFound, "category not found")
 			tx.Rollback()
@@ -1063,7 +1063,7 @@ func getItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	category, err := getCategoryByID(item.CategoryID)
+	category, err := getCategoryByID(dbx, item.CategoryID)
 	if err != nil {
 		outputErrorMsg(w, http.StatusNotFound, "category not found")
 		return
@@ -1351,7 +1351,7 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	category, err := getCategoryByID(targetItem.CategoryID)
+	category, err := getCategoryByID(tx, targetItem.CategoryID)
 	if err != nil {
 		log.Print(err)
 
@@ -1949,7 +1949,7 @@ func postSell(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	category, err := getCategoryByID(categoryID)
+	category, err := getCategoryByID(dbx, categoryID)
 	if err != nil || category.ParentID == 0 {
 		log.Print(categoryID, category)
 		outputErrorMsg(w, http.StatusBadRequest, "Incorrect category ID")
