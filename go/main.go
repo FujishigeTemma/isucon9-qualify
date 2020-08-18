@@ -423,6 +423,8 @@ func getUserSimplesByIDs(q sqlx.Queryer, userIDs []int64) (userSimpleMap map[int
 	if err != nil {
 		return userSimpleMap, err
 	}
+
+	userSimpleMap = make(map[int64]UserSimple)
 	for _, u := range userSimples {
 		userSimpleMap[u.ID] = u
 	}
