@@ -14,6 +14,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
+	"sync"
 	"time"
 
 	_ "net/http/pprof"
@@ -911,17 +912,16 @@ type TransactionAdditions struct {
 	ShippingStatus            string `db:"-"`
 }
 type APIShippingStatus struct {
-	TeID   int64
 	Status string
 	err    error
 }
 
-func requestShippingStatus(transactionEvidenceID int64, reserveID string, res chan<- APIShippingStatus) {
+func requestShippingStatus(transactionEvidenceID int64, reserveID string, m *map[int64]APIShippingStatus, wg *sync.WaitGroup) {
+	defer wg.Done()
 	ssr, err := APIShipmentStatus(getShipmentServiceURL(), &APIShipmentStatusReq{
 		ReserveID: reserveID,
 	})
-	res <- APIShippingStatus{
-		TeID: transactionEvidenceID,
+	(*m)[transactionEvidenceID] = APIShippingStatus{
 		Status: ssr.Status,
 		err:    err,
 	}
@@ -951,21 +951,26 @@ func getShippingStatuses(tx *sqlx.Tx, w http.ResponseWriter, transactionEvidence
 		return ssMap, true
 	}
 
-	chs := make(chan APIShippingStatus, len(shippings))
+	resMap := make(map[int64]APIShippingStatus)
+	wg := sync.WaitGroup{}
+
+	wg.Add(len(shippings))
 	for _, s := range shippings {
-		go requestShippingStatus(s.TransactionEvidenceID, s.ReserveID, chs)
+		go requestShippingStatus(s.TransactionEvidenceID, s.ReserveID, &resMap, &wg)
 	}
 
+	wg.Wait()
+
 	ssMap = make(map[int64]string)
-	for ch := range chs {
-		if ch.err != nil {
-			log.Print(ch.err)
+	for key, val := range resMap {
+		if val.err != nil {
+			log.Print(val.err)
 			outputErrorMsg(w, http.StatusInternalServerError, "failed to request to shipment service")
 			tx.Rollback()
 			return ssMap, true
 		}
 
-		ssMap[ch.TeID] = ch.Status
+		ssMap[key] = val.Status
 	}
 
 	return ssMap, false
