@@ -2387,7 +2387,7 @@ func getSettings(w http.ResponseWriter, r *http.Request) {
 }
 
 func postLogin(w http.ResponseWriter, r *http.Request) {
-	user, statusCode := APIAuthCheck("172.16.0.162:8080", &r.Body)
+	user, statusCode := APIAuthCheck(&r.Body)
 	if statusCode == http.StatusUnauthorized {
 		outputErrorMsg(w, http.StatusUnauthorized, "アカウント名かパスワードが間違えています")
 		return

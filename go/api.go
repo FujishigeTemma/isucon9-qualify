@@ -185,14 +185,20 @@ func APIShipmentStatus(shipmentURL string, param *APIShipmentStatusReq) (*APIShi
 	return ssr, nil
 }
 
-func APIAuthCheck(authURL string, body *io.ReadCloser) (*User, int) {
-	req, err := http.NewRequest(http.MethodPost, authURL+"/auth", *body)
-	if err != nil {
-		log.Print(err)
-
-		return &User{}, http.StatusInternalServerError
-	}
-	res, err := http.DefaultClient.Do(req)
+func APIAuthCheck(body *io.ReadCloser) (*User, int) {
+	//req, err := http.NewRequest(http.MethodPost, authURL+"/auth", *body)
+	//if err != nil {
+	//	log.Print(err)
+	//
+	//	return &User{}, http.StatusInternalServerError
+	//}
+	//res, err := http.DefaultClient.Do(req)
+	//if err != nil {
+	//	log.Print(err)
+	//
+	//	return &User{}, http.StatusInternalServerError
+	//}
+	res, err := http.Post("172.16.0.162:8080/auth", "application/json", *body)
 	if err != nil {
 		log.Print(err)
 
