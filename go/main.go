@@ -943,7 +943,7 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 	tx := dbx.MustBegin()
 	its := []ItemWithTransaction{}
 
-	selectStr := sqlxselect.New(&ItemWithTransaction{}).SelectStructAs("i.*", "i.*").SelectStructAs("t.*", "t.*", "id", "status").String()
+	selectStr := sqlxselect.New(&ItemWithTransaction{}).SelectStructAs("i.*", "i.*").SelectStructAs("t.*", "t.*", "id").String()
 	if itemID > 0 && createdAt > 0 {
 		// paging
 		err := tx.Select(&its,
@@ -1001,8 +1001,7 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 	itemDetails := make([]ItemDetail, 0, len(its))
 	for _, it := range its {
 		item := it.Item
-		transactionEvidenceID := it.Te.ID
-		transactionEvidenceStatus := it.Te.Status
+		transactionEvidence := it.Te
 
 		seller := userSimpleMap[item.SellerID]
 		category, err := getCategoryByID(item.CategoryID)
@@ -1037,9 +1036,9 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 			itemDetail.Buyer = &buyer
 		}
 
-		if transactionEvidenceID > 0 {
+		if transactionEvidence.ID > 0 {
 			shipping := Shipping{}
-			err = tx.Get(&shipping, "SELECT * FROM `shippings` WHERE `transaction_evidence_id` = ?", transactionEvidenceID)
+			err = tx.Get(&shipping, "SELECT * FROM `shippings` WHERE `transaction_evidence_id` = ?", transactionEvidence.ID)
 			if err == sql.ErrNoRows {
 				outputErrorMsg(w, http.StatusNotFound, "shipping not found")
 				tx.Rollback()
@@ -1062,8 +1061,8 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
-			itemDetail.TransactionEvidenceID = transactionEvidenceID
-			itemDetail.TransactionEvidenceStatus = transactionEvidenceStatus
+			itemDetail.TransactionEvidenceID = transactionEvidence.ID
+			itemDetail.TransactionEvidenceStatus = transactionEvidence.Status
 			itemDetail.ShippingStatus = ssr.Status
 		}
 
