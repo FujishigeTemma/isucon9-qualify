@@ -906,8 +906,8 @@ func getUserItems(w http.ResponseWriter, r *http.Request) {
 }
 
 type ItemWithTransaction struct {
-	Item *Item                `db:"i"`
-	Te   *TransactionEvidence `db:"t"`
+	Item Item                `db:"i"`
+	Te   TransactionEvidence `db:"t"`
 }
 
 func getTransactions(w http.ResponseWriter, r *http.Request) {
