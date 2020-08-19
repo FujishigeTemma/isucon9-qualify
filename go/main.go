@@ -908,10 +908,10 @@ type TransactionAdditions struct {
 	ItemID                    int64  `json:"item_id" db:"item_id"`
 	TransactionEvidenceID     int64  `json:"id" db:"id"`
 	TransactionEvidenceStatus string `json:"status" db:"status"`
+	ReserveID                 string `db:"-"`
 	//ShippingStatus            string `db:"-"`
 }
 
-/*
 func getShippingStatuses(tx *sqlx.Tx, w http.ResponseWriter, transactionEvidenceIDs []int64) (ssMap map[int64]string, hadErr bool) {
 	query, args, err := sqlx.In("SELECT * FROM `shippings` WHERE `transaction_evidence_id` IN (?)", transactionEvidenceIDs)
 	if err != nil {
@@ -938,6 +938,7 @@ func getShippingStatuses(tx *sqlx.Tx, w http.ResponseWriter, transactionEvidence
 
 	ssMap = make(map[int64]string)
 	for _, s := range shippings {
+		/*
 		ssr, err := APIShipmentStatus(getShipmentServiceURL(), &APIShipmentStatusReq{
 			ReserveID: s.ReserveID,
 		})
@@ -949,10 +950,11 @@ func getShippingStatuses(tx *sqlx.Tx, w http.ResponseWriter, transactionEvidence
 		}
 
 		ssMap[s.TransactionEvidenceID] = ssr.Status
+		*/
+		ssMap[s.TransactionEvidenceID] = s.ReserveID
 	}
 	return ssMap, false
 }
-*/
 
 func getTransactionAdditions(tx *sqlx.Tx, w http.ResponseWriter, itemIDs []int64) (iMap map[int64]TransactionAdditions, hadErr bool) {
 	query, args, err := sqlx.In("SELECT id, status, item_id FROM `transaction_evidences` WHERE `item_id` IN (?)", itemIDs)
@@ -1131,22 +1133,9 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 			itemDetail.TransactionEvidenceStatus = ta.TransactionEvidenceStatus
 			//itemDetail.ShippingStatus = ta.ShippingStatus
 
-			shipping := Shipping{}
-			err = tx.Get(&shipping, "SELECT * FROM `shippings` WHERE `transaction_evidence_id` = ?", ta.TransactionEvidenceID)
-			if err == sql.ErrNoRows {
-				outputErrorMsg(w, http.StatusNotFound, "shipping not found")
-				tx.Rollback()
-				return
-			}
-			if err != nil {
-				log.Print(err)
-				outputErrorMsg(w, http.StatusInternalServerError, "db error")
-				tx.Rollback()
-				return
-			}
 			// TODO: 外部APIからDBへ
 			ssr, err := APIShipmentStatus(getShipmentServiceURL(), &APIShipmentStatusReq{
-				ReserveID: shipping.ReserveID,
+				ReserveID: ta.ReserveID,
 			})
 			if err != nil {
 				log.Print(err)
