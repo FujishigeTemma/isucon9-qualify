@@ -3,7 +3,7 @@ package main
 import (
 	crand "crypto/rand"
 	"database/sql"
-	"encoding/json"
+	jsoniter "github.com/json-iterator/go"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -26,6 +26,8 @@ import (
 	"goji.io/pat"
 	"golang.org/x/crypto/bcrypt"
 )
+
+var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 const (
 	sessionName = "session_isucari"
