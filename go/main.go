@@ -1132,7 +1132,7 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 			//itemDetail.ShippingStatus = ta.ShippingStatus
 
 			shipping := Shipping{}
-			err = tx.Get(&shipping, "SELECT * FROM `shippings` WHERE `transaction_evidence_id` = ?", transactionEvidence.ID)
+			err = tx.Get(&shipping, "SELECT * FROM `shippings` WHERE `transaction_evidence_id` = ?", ta.TransactionEvidenceID)
 			if err == sql.ErrNoRows {
 				outputErrorMsg(w, http.StatusNotFound, "shipping not found")
 				tx.Rollback()
