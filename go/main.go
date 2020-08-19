@@ -906,8 +906,12 @@ func getUserItems(w http.ResponseWriter, r *http.Request) {
 }
 
 type ItemWithTransaction struct {
-	Item Item                `db:"i"`
-	Te   TransactionEvidence `db:"t"`
+	Item Item                      `db:"i"`
+	Te   TransactionEvidenceSimple `db:"t"`
+}
+type TransactionEvidenceSimple struct {
+	ID     sql.NullInt64  `json:"id" db:"id"`
+	Status sql.NullString `json:"status" db:"status"`
 }
 
 func getTransactions(w http.ResponseWriter, r *http.Request) {
@@ -1037,7 +1041,7 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 			itemDetail.Buyer = &buyer
 		}
 
-		if transactionEvidenceID > 0 {
+		if transactionEvidenceID.Valid && transactionEvidenceID.Int64 > 0 {
 			shipping := Shipping{}
 			err = tx.Get(&shipping, "SELECT * FROM `shippings` WHERE `transaction_evidence_id` = ?", transactionEvidenceID)
 			if err == sql.ErrNoRows {
@@ -1062,8 +1066,8 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
-			itemDetail.TransactionEvidenceID = transactionEvidenceID
-			itemDetail.TransactionEvidenceStatus = transactionEvidenceStatus
+			itemDetail.TransactionEvidenceID = transactionEvidenceID.Int64
+			itemDetail.TransactionEvidenceStatus = transactionEvidenceStatus.String
 			itemDetail.ShippingStatus = ssr.Status
 		}
 
