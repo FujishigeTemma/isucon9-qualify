@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"html/template"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -63,6 +64,7 @@ const (
 )
 
 var (
+	templates     *template.Template
 	dbx           *sqlx.DB
 	store         sessions.Store
 	categoryCache map[int]Category
@@ -275,6 +277,10 @@ func init() {
 	store = sessions.NewCookieStore([]byte("abc"))
 
 	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
+
+	templates = template.Must(template.ParseFiles(
+		"../public/index.html",
+	))
 }
 
 func main() {
@@ -344,7 +350,20 @@ func main() {
 	mux.HandleFunc(pat.Post("/login"), postLogin)
 	mux.HandleFunc(pat.Post("/register"), postRegister)
 	mux.HandleFunc(pat.Get("/reports.json"), getReports)
-	log.Fatal(http.ListenAndServe(":8000", mux))
+	// Frontend
+	mux.HandleFunc(pat.Get("/"), getIndex)
+	mux.HandleFunc(pat.Get("/login"), getIndex)
+	mux.HandleFunc(pat.Get("/register"), getIndex)
+	mux.HandleFunc(pat.Get("/timeline"), getIndex)
+	mux.HandleFunc(pat.Get("/categories/:category_id/items"), getIndex)
+	mux.HandleFunc(pat.Get("/sell"), getIndex)
+	mux.HandleFunc(pat.Get("/items/:item_id"), getIndex)
+	mux.HandleFunc(pat.Get("/items/:item_id/edit"), getIndex)
+	mux.HandleFunc(pat.Get("/items/:item_id/buy"), getIndex)
+	mux.HandleFunc(pat.Get("/buy/complete"), getIndex)
+	mux.HandleFunc(pat.Get("/transactions/:transaction_id"), getIndex)
+	mux.HandleFunc(pat.Get("/users/:user_id"), getIndex)
+	mux.HandleFunc(pat.Get("/users/setting"), getIndex)
 }
 
 func getSession(r *http.Request) *sessions.Session {
@@ -464,6 +483,10 @@ func getShipmentServiceURL() string {
 		return DefaultShipmentServiceURL
 	}
 	return val
+}
+
+func getIndex(w http.ResponseWriter, r *http.Request) {
+	templates.ExecuteTemplate(w, "index.html", struct{}{})
 }
 
 func postInitialize(w http.ResponseWriter, r *http.Request) {
