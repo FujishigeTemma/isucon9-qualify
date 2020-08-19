@@ -48,14 +48,14 @@ update: pull build restart curl
 
 pull:
 	@git pull
-	@cd $(PROJECT_ROOT)
-	@go mod tidy
-	@go mod download
+	@cd $(PROJECT_ROOT) && \
+		go mod tidy && \
+		go mod download
 
 .PHONY: build
 build:
-	@cd $(BUILD_DIR)
-	@make
+	@cd $(BUILD_DIR) && \
+		make
 	#@go build -o $(BIN_NAME)
 
 .PHONY: restart
