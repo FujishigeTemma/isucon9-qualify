@@ -654,13 +654,11 @@ func getNewCategoryItems(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO find from memcache
-	var categoryIDs []int
-	err = dbx.Select(&categoryIDs, "SELECT id FROM `categories` WHERE parent_id=?", rootCategory.ID)
-	if err != nil {
-		log.Print(err)
-		outputErrorMsg(w, http.StatusInternalServerError, "db error")
-		return
+	categoryIDs := make([]int, 0)
+	for _, c := range categoryCache {
+		if rootCategory.ID == c.ParentID {
+			categoryIDs = append(categoryIDs, c.ID)
+		}
 	}
 
 	query := r.URL.Query()
