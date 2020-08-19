@@ -185,7 +185,7 @@ func APIShipmentStatus(shipmentURL string, param *APIShipmentStatusReq) (*APIShi
 }
 
 func APIAuthCheck(authURL string, body *io.ReadCloser) (*User, int) {
-	req, err := http.NewRequest(http.MethodGet, authURL, *body)
+	req, err := http.NewRequest(http.MethodGet, authURL+"/auth", *body)
 	if err != nil {
 		return &User{}, http.StatusInternalServerError
 	}
