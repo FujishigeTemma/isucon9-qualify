@@ -9,5 +9,6 @@ DROP USER IF EXISTS 'isucari'@'%';
 CREATE USER 'isucari'@'%' IDENTIFIED BY 'isucari';
 GRANT ALL PRIVILEGES ON `isucari`.* TO 'isucari'@'%';
 
+-- 実行されない(confに書いた)
 SET global max_connections = 512;
 SET global query_cache_type = ON;

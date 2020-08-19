@@ -68,6 +68,9 @@ build:
 restart:
 	@sudo systemctl restart $(APP_SERVICE)
 
+.PHONY: bench
+bench: stash-log log
+
 .PHONY: stash-log
 stash-log:
 	@$(eval when := $(shell date "+%s"))
@@ -135,12 +138,10 @@ digestslow:
 .PHONY: slow-on
 slow-on:
 	@sudo mysql -e "set global slow_query_log_file = '$(MYSQL_LOG)'; set global long_query_time = 0; set global slow_query_log = ON;"
-	@sudo systemctl restart mysql
 
 .PHONY: slow-off
 slow-off:
 	@sudo mysql -e "set global slow_query_log = OFF;"
-	@sudo systemctl restart mysql
 
 .PHONY: prune
 prune: stash-log slow-off pull build curl
