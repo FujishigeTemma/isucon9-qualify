@@ -2126,7 +2126,7 @@ func postSell(w http.ResponseWriter, r *http.Request) {
 
 	category, err := getCategoryByID(categoryID)
 	if err != nil || category.ParentID == 0 {
-		log.Print(categoryID, category)
+		//log.Print(categoryID, category)
 		outputErrorMsg(w, http.StatusBadRequest, "Incorrect category ID")
 		return
 	}
