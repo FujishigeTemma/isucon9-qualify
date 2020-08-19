@@ -955,25 +955,29 @@ func getShippingStatuses(tx *sqlx.Tx, w http.ResponseWriter, transactionEvidence
 	resMap := NewAPIShippingStatusMap()
 	wg := sync.WaitGroup{}
 
-	wg.Add(len(shippings))
 	for _, s := range shippings {
-		go requestShippingStatus(s.TransactionEvidenceID, s.ReserveID, &resMap, &wg)
+		if s.Status == "shipping" {
+			wg.Add(1)
+			go requestShippingStatus(s.TransactionEvidenceID, s.ReserveID, &resMap, &wg)
+		}
 	}
 
 	wg.Wait()
 
 	ssMap = make(map[int64]string)
 	for _, s := range shippings {
-		key := s.TransactionEvidenceID
-		val, _ := resMap.Load(key)
-		if val.err != nil {
-			log.Print(val.err)
-			outputErrorMsg(w, http.StatusInternalServerError, "failed to request to shipment service")
-			tx.Rollback()
-			return ssMap, true
+		if s.Status == "shipping" {
+			val, _ := resMap.Load(s.TransactionEvidenceID)
+			if val.err != nil {
+				log.Print(val.err)
+				outputErrorMsg(w, http.StatusInternalServerError, "failed to request to shipment service")
+				tx.Rollback()
+				return ssMap, true
+			}
+			ssMap[s.TransactionEvidenceID] = val.Status
+		} else {
+			ssMap[s.TransactionEvidenceID] = s.Status
 		}
-
-		ssMap[key] = val.Status
 	}
 
 	return ssMap, false
