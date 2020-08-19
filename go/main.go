@@ -963,10 +963,10 @@ func getTransactionAdditions(tx *sqlx.Tx, w http.ResponseWriter, itemIDs []int64
 	tas := []TransactionAdditions{}
 	err = sqlx.Select(tx, &tas, query, args...)
 	if err == sql.ErrNoRows {
+		// It's able to ignore ErrNoRows
 		return make(map[int64]TransactionAdditions), true
 	}
 	if err != nil {
-		// It's able to ignore ErrNoRows
 		log.Print(err)
 		outputErrorMsg(w, http.StatusInternalServerError, "db error")
 		tx.Rollback()
@@ -974,8 +974,8 @@ func getTransactionAdditions(tx *sqlx.Tx, w http.ResponseWriter, itemIDs []int64
 	}
 
 	ids := make([]int64, 0, len(tas))
-	for _, id := range ids {
-		ids = append(ids, id)
+	for _, ta := range tas {
+		ids = append(ids, ta.TransactionEvidenceID)
 	}
 	shippingStatusMap, hadErr := getShippingStatuses(tx, w, ids)
 	if hadErr {
