@@ -327,10 +327,6 @@ func main() {
 	}
 	defer dbx.Close()
 
-	dbx.SetConnMaxLifetime(10 * time.Second)
-	dbx.SetMaxIdleConns(512)
-	dbx.SetMaxOpenConns(512)
-
 	categoryCache = make(map[int]Category)
 
 	mux := goji.NewMux()
