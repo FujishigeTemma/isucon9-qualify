@@ -911,15 +911,17 @@ type TransactionAdditions struct {
 	ShippingStatus            string `db:"-"`
 }
 type APIShippingStatus struct {
+	TeID   int64
 	Status string
 	err    error
 }
 
-func requestShippingStatus(reserveID string, res chan<- APIShippingStatus) {
+func requestShippingStatus(transactionEvidenceID int64, reserveID string, res chan<- APIShippingStatus) {
 	ssr, err := APIShipmentStatus(getShipmentServiceURL(), &APIShipmentStatusReq{
 		ReserveID: reserveID,
 	})
 	res <- APIShippingStatus{
+		TeID: transactionEvidenceID,
 		Status: ssr.Status,
 		err:    err,
 	}
@@ -949,23 +951,23 @@ func getShippingStatuses(tx *sqlx.Tx, w http.ResponseWriter, transactionEvidence
 		return ssMap, true
 	}
 
-	chs := make([]chan APIShippingStatus, len(shippings))
-	for i, s := range shippings {
-		go requestShippingStatus(s.ReserveID, chs[i])
+	chs := make(chan APIShippingStatus, len(shippings))
+	for _, s := range shippings {
+		go requestShippingStatus(s.TransactionEvidenceID, s.ReserveID, chs)
 	}
 
 	ssMap = make(map[int64]string)
-	for i, s := range shippings {
-		res := <-chs[i]
-		if res.err != nil {
-			log.Print(res.err)
+	for ch := range chs {
+		if ch.err != nil {
+			log.Print(ch.err)
 			outputErrorMsg(w, http.StatusInternalServerError, "failed to request to shipment service")
 			tx.Rollback()
 			return ssMap, true
 		}
 
-		ssMap[s.TransactionEvidenceID] = res.Status
+		ssMap[ch.TeID] = ch.Status
 	}
+
 	return ssMap, false
 }
 
