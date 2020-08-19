@@ -364,6 +364,8 @@ func main() {
 	mux.HandleFunc(pat.Get("/transactions/:transaction_id"), getIndex)
 	mux.HandleFunc(pat.Get("/users/:user_id"), getIndex)
 	mux.HandleFunc(pat.Get("/users/setting"), getIndex)
+
+	log.Fatal(http.ListenAndServe(":8000", mux))
 }
 
 func getSession(r *http.Request) *sessions.Session {
