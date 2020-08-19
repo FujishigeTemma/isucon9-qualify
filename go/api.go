@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"net/http"
 )
 
@@ -187,16 +188,24 @@ func APIShipmentStatus(shipmentURL string, param *APIShipmentStatusReq) (*APIShi
 func APIAuthCheck(authURL string, body *io.ReadCloser) (*User, int) {
 	req, err := http.NewRequest(http.MethodPost, authURL+"/auth", *body)
 	if err != nil {
+		log.Print(err)
+
 		return &User{}, http.StatusInternalServerError
 	}
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
+		log.Print(err)
+
 		return &User{}, http.StatusInternalServerError
 	}
 	defer res.Body.Close()
 
 	u := &User{}
-	err = json.NewDecoder(res.Body).Decode(&u)
+	if err = json.NewDecoder(res.Body).Decode(&u); err != nil {
+		log.Print(err)
+
+		return &User{}, http.StatusInternalServerError
+	}
 
 	return u, res.StatusCode
 }
