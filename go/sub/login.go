@@ -25,11 +25,14 @@ func main() {
 		"isucari",   // dbname
 	)
 
-	dbx, err := sqlx.Open("mysql", dsn)
+	_dbx, err := sqlx.Open("mysql", dsn)
 	if err != nil {
 		log.Fatalf("failed to connect to DB: %s.", err.Error())
 	}
+	dbx = _dbx
 	defer dbx.Close()
+
+	// go pollDB()
 
 	http.HandleFunc("/auth", auth)
 	http.ListenAndServe(":8080", nil)
@@ -68,6 +71,8 @@ func auth(w http.ResponseWriter, r *http.Request) {
 	}
 
 	u := User{}
+	fmt.Println(u)
+	fmt.Println(&u)
 	err = dbx.Get(&u, "SELECT * FROM `users` WHERE `account_name` = ?", accountName)
 	if err == sql.ErrNoRows {
 		outputErrorMsg(w, http.StatusUnauthorized, "アカウント名かパスワードが間違えています")
@@ -94,8 +99,8 @@ func auth(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json;charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(struct {
-		user User `json:"user"`
-	}{user: u})
+		User User `json:"user"`
+	}{User: u})
 }
 
 func outputErrorMsg(w http.ResponseWriter, status int, msg string) {
@@ -106,4 +111,15 @@ func outputErrorMsg(w http.ResponseWriter, status int, msg string) {
 	json.NewEncoder(w).Encode(struct {
 		Error string `json:"error"`
 	}{Error: msg})
+}
+
+func pollDB() {
+	for {
+		err := dbx.Ping()
+		if err != nil {
+			log.Printf("Failed to ping DB: %s", err)
+		}
+		log.Println("ping pong")
+		time.Sleep(time.Second)
+	}
 }
