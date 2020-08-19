@@ -939,17 +939,17 @@ func getShippingStatuses(tx *sqlx.Tx, w http.ResponseWriter, transactionEvidence
 	ssMap = make(map[int64]string)
 	for _, s := range shippings {
 		/*
-		ssr, err := APIShipmentStatus(getShipmentServiceURL(), &APIShipmentStatusReq{
-			ReserveID: s.ReserveID,
-		})
-		if err != nil {
-			log.Print(err)
-			outputErrorMsg(w, http.StatusInternalServerError, "failed to request to shipment service")
-			tx.Rollback()
-			return ssMap, true
-		}
+			ssr, err := APIShipmentStatus(getShipmentServiceURL(), &APIShipmentStatusReq{
+				ReserveID: s.ReserveID,
+			})
+			if err != nil {
+				log.Print(err)
+				outputErrorMsg(w, http.StatusInternalServerError, "failed to request to shipment service")
+				tx.Rollback()
+				return ssMap, true
+			}
 
-		ssMap[s.TransactionEvidenceID] = ssr.Status
+			ssMap[s.TransactionEvidenceID] = ssr.Status
 		*/
 		ssMap[s.TransactionEvidenceID] = s.ReserveID
 	}
@@ -975,24 +975,23 @@ func getTransactionAdditions(tx *sqlx.Tx, w http.ResponseWriter, itemIDs []int64
 		return iMap, true
 	}
 
-	/*
-		ids := make([]int64, 0, len(tas))
-		for _, ta := range tas {
-			ids = append(ids, ta.TransactionEvidenceID)
-		}
-		// It's able to ignore ErrNoRows
-		if len(ids) <= 0 {
-			return make(map[int64]TransactionAdditions), false
-		}
-		shippingStatusMap, hadErr := getShippingStatuses(tx, w, ids)
-		if hadErr {
-			return iMap, true
-		}
-	*/
+	ids := make([]int64, 0, len(tas))
+	for _, ta := range tas {
+		ids = append(ids, ta.TransactionEvidenceID)
+	}
+	// It's able to ignore ErrNoRows
+	if len(ids) <= 0 {
+		return make(map[int64]TransactionAdditions), false
+	}
+	shippingStatusMap, hadErr := getShippingStatuses(tx, w, ids)
+	if hadErr {
+		return iMap, true
+	}
 
 	iMap = make(map[int64]TransactionAdditions)
 	for _, ta := range tas {
 		//ta.ShippingStatus = shippingStatusMap[ta.TransactionEvidenceID]
+		ta.ReserveID = shippingStatusMap[ta.TransactionEvidenceID]
 		iMap[ta.ItemID] = ta
 	}
 	return iMap, false
