@@ -21,8 +21,8 @@ MYSQL_LOG:=/tmp/slow-query.log
 
 KATARIBE_CFG:=~/kataribe.toml
 
-SLACKCAT:=slackcat --tee --stream --channel ##チャンネル名##
-SLACKRAW:=slackcat --stream --channel ##チャンネル名##
+SLACKCAT:=slackcat --tee --channel ##チャンネル名##
+SLACKRAW:=slackcat --channel ##チャンネル名##
 
 PPROF:=go tool pprof -seconds=180  -png -output pprof.png http://localhost:6060/debug/pprof/profile
 
