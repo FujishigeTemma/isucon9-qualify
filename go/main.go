@@ -916,15 +916,30 @@ type APIShippingStatus struct {
 	err    error
 }
 
-func requestShippingStatus(transactionEvidenceID int64, reserveID string, m *map[int64]APIShippingStatus, wg *sync.WaitGroup) {
+func requestShippingStatus(transactionEvidenceID int64, reserveID string, m *APIShippingStatusMap, wg *sync.WaitGroup) {
 	defer wg.Done()
 	ssr, err := APIShipmentStatus(getShipmentServiceURL(), &APIShipmentStatusReq{
 		ReserveID: reserveID,
 	})
-	(*m)[transactionEvidenceID] = APIShippingStatus{
+	m.Store(transactionEvidenceID, APIShippingStatus{
 		Status: ssr.Status,
 		err:    err,
-	}
+	})
+}
+
+type APIShippingStatusMap struct {
+	s sync.Map
+}
+
+func NewAPIShippingStatusMap() APIShippingStatusMap {
+	return APIShippingStatusMap{}
+}
+func (s *APIShippingStatusMap) Store(key int64, value APIShippingStatus) {
+	s.s.Store(key, value)
+}
+func (s *APIShippingStatusMap) Load(key int64) (APIShippingStatus, bool) {
+	v, ok := s.s.Load(key)
+	return v.(APIShippingStatus), ok
 }
 
 func getShippingStatuses(tx *sqlx.Tx, w http.ResponseWriter, transactionEvidenceIDs []int64) (ssMap map[int64]string, hadErr bool) {
@@ -951,7 +966,7 @@ func getShippingStatuses(tx *sqlx.Tx, w http.ResponseWriter, transactionEvidence
 		return ssMap, true
 	}
 
-	resMap := make(map[int64]APIShippingStatus)
+	resMap := NewAPIShippingStatusMap()
 	wg := sync.WaitGroup{}
 
 	wg.Add(len(shippings))
@@ -962,7 +977,9 @@ func getShippingStatuses(tx *sqlx.Tx, w http.ResponseWriter, transactionEvidence
 	wg.Wait()
 
 	ssMap = make(map[int64]string)
-	for key, val := range resMap {
+	for _, s := range shippings {
+		key := s.TransactionEvidenceID
+		val, _ := resMap.Load(key)
 		if val.err != nil {
 			log.Print(val.err)
 			outputErrorMsg(w, http.StatusInternalServerError, "failed to request to shipment service")
