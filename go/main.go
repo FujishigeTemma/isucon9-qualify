@@ -532,9 +532,13 @@ func postInitialize(w http.ResponseWriter, r *http.Request) {
 		categoryCache[c.ID] = c
 	}
 
+	campaign, err := strconv.Atoi(os.Getenv("CAMPAIGN"))
+	if err != nil {
+		campaign = 0
+	}
 	res := resInitialize{
 		// キャンペーン実施時には還元率の設定を返す。詳しくはマニュアルを参照のこと。
-		Campaign: 0,
+		Campaign: campaign,
 		// 実装言語を返す
 		Language: "Go",
 	}
@@ -975,7 +979,7 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	userIds := make([]int64, 0, len(items) * 2)
+	userIds := make([]int64, 0, len(items)*2)
 	for _, item := range items {
 		userIds = append(userIds, item.SellerID)
 		userIds = append(userIds, item.BuyerID)
@@ -1452,12 +1456,12 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 	var pstr *APIPaymentServiceTokenRes
 
 	type ScrStruct struct {
-		scr	*APIShipmentCreateRes
+		scr *APIShipmentCreateRes
 		err error
 	}
 	type PstrStruct struct {
 		pstr *APIPaymentServiceTokenRes
-		err	error
+		err  error
 	}
 	scrChan := make(chan ScrStruct)
 	pstrChan := make(chan PstrStruct)
@@ -1468,7 +1472,7 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 			FromAddress: seller.Address,
 			FromName:    seller.AccountName,
 		})
-		str := ScrStruct {
+		str := ScrStruct{
 			scr: scr,
 			err: err,
 		}
@@ -1481,16 +1485,16 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 			APIKey: PaymentServiceIsucariAPIKey,
 			Price:  targetItem.Price,
 		})
-		str := PstrStruct {
+		str := PstrStruct{
 			pstr: pstr,
-			err: err,
+			err:  err,
 		}
 		pstrChan <- str
 	}()
 
 	for i := 0; i < 2; i++ {
 		select {
-		case str := <- scrChan:
+		case str := <-scrChan:
 			scr = str.scr
 			err = str.err
 			if err != nil {
@@ -1499,12 +1503,12 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 				tx.Rollback()
 				return
 			}
-		case str := <- pstrChan:
+		case str := <-pstrChan:
 			pstr = str.pstr
 			err = str.err
 			if err != nil {
 				log.Print(err)
-		
+
 				outputErrorMsg(w, http.StatusInternalServerError, "payment service is failed")
 				tx.Rollback()
 				return
