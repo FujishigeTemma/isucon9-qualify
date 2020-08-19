@@ -3,6 +3,7 @@ module github.com/isucon/isucon9-qualify/webapp/go
 go 1.12
 
 require (
+	github.com/felixge/fgprof v0.9.1
 	github.com/go-sql-driver/mysql v1.5.0
 	github.com/goccy/go-json v0.1.8
 	github.com/gorilla/sessions v1.2.0

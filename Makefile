@@ -24,7 +24,8 @@ KATARIBE_CFG:=~/kataribe.toml
 SLACKCAT:=slackcat --tee --channel ##チャンネル名##
 SLACKRAW:=slackcat --channel ##チャンネル名##
 
-PPROF:=go tool pprof -seconds=120  -png -output pprof.png http://localhost:6060/debug/pprof/profile
+# PPROF:=go tool pprof -seconds=120  -png -output pprof.png http://localhost:6060/debug/pprof/profile
+PPROF:=go tool pprof -png -output pprof.png --http=118.27.33.49:6666 http://localhost:6060/debug/fgprof?seconds=120
 
 PROJECT_ROOT:=~/isucari/webapp/go ##プロジェクトルートディレクトリ##
 BUILD_DIR:=~/isucari/webapp/go ##バイナリ生成先##
