@@ -206,12 +206,12 @@ func APIAuthCheck(body *io.ReadCloser) (*User, int) {
 	}
 	defer res.Body.Close()
 
-	u := &User{}
+	u := User{}
 	if err = json.NewDecoder(res.Body).Decode(&u); err != nil {
 		log.Print(err)
 		fmt.Println(err)
 		return &User{}, http.StatusInternalServerError
 	}
 
-	return u, res.StatusCode
+	return &u, res.StatusCode
 }
