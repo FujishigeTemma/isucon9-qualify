@@ -407,17 +407,12 @@ func getUser(r *http.Request) (user User, errCode int, errMsg string) {
 
 func getUserID(r *http.Request) (userID int64, errCode int, errMsg string) {
 	session := getSession(r)
-	userIDStr, ok := session.Values["user_id"]
+	userIDRaw, ok := session.Values["user_id"]
 	if !ok {
 		return 0, http.StatusNotFound, "no session"
 	}
 
-	userID, err := strconv.ParseInt(userIDStr.(string), 10, 64)
-	if err != nil {
-		return 0, http.StatusBadRequest, "invalid userID"
-	}
-
-	return userID, http.StatusOK, ""
+	return userIDRaw.(int64), http.StatusOK, ""
 }
 
 func getUserSimpleByID(q sqlx.Queryer, userID int64) (userSimple UserSimple, err error) {
