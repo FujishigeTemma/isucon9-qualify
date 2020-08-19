@@ -908,8 +908,7 @@ type TransactionAdditions struct {
 	ItemID                    int64  `json:"item_id" db:"item_id"`
 	TransactionEvidenceID     int64  `json:"id" db:"id"`
 	TransactionEvidenceStatus string `json:"status" db:"status"`
-	ReserveID                 string `db:"-"`
-	//ShippingStatus            string `db:"-"`
+	ShippingStatus            string `db:"-"`
 }
 
 func getShippingStatuses(tx *sqlx.Tx, w http.ResponseWriter, transactionEvidenceIDs []int64) (ssMap map[int64]string, hadErr bool) {
@@ -938,7 +937,6 @@ func getShippingStatuses(tx *sqlx.Tx, w http.ResponseWriter, transactionEvidence
 
 	ssMap = make(map[int64]string)
 	for _, s := range shippings {
-		/*
 		ssr, err := APIShipmentStatus(getShipmentServiceURL(), &APIShipmentStatusReq{
 			ReserveID: s.ReserveID,
 		})
@@ -950,8 +948,6 @@ func getShippingStatuses(tx *sqlx.Tx, w http.ResponseWriter, transactionEvidence
 		}
 
 		ssMap[s.TransactionEvidenceID] = ssr.Status
-		*/
-		ssMap[s.TransactionEvidenceID] = s.ReserveID
 	}
 	return ssMap, false
 }
@@ -975,24 +971,22 @@ func getTransactionAdditions(tx *sqlx.Tx, w http.ResponseWriter, itemIDs []int64
 		return iMap, true
 	}
 
-	/*
-		ids := make([]int64, 0, len(tas))
-		for _, ta := range tas {
-			ids = append(ids, ta.TransactionEvidenceID)
-		}
-		// It's able to ignore ErrNoRows
-		if len(ids) <= 0 {
-			return make(map[int64]TransactionAdditions), false
-		}
-		shippingStatusMap, hadErr := getShippingStatuses(tx, w, ids)
-		if hadErr {
-			return iMap, true
-		}
-	*/
+	ids := make([]int64, 0, len(tas))
+	for _, ta := range tas {
+		ids = append(ids, ta.TransactionEvidenceID)
+	}
+	// It's able to ignore ErrNoRows
+	if len(ids) <= 0 {
+		return make(map[int64]TransactionAdditions), false
+	}
+	shippingStatusMap, hadErr := getShippingStatuses(tx, w, ids)
+	if hadErr {
+		return iMap, true
+	}
 
 	iMap = make(map[int64]TransactionAdditions)
 	for _, ta := range tas {
-		//ta.ShippingStatus = shippingStatusMap[ta.TransactionEvidenceID]
+		ta.ShippingStatus = shippingStatusMap[ta.TransactionEvidenceID]
 		iMap[ta.ItemID] = ta
 	}
 	return iMap, false
@@ -1131,19 +1125,7 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 		if exists && ta.TransactionEvidenceID > 0 {
 			itemDetail.TransactionEvidenceID = ta.TransactionEvidenceID
 			itemDetail.TransactionEvidenceStatus = ta.TransactionEvidenceStatus
-			//itemDetail.ShippingStatus = ta.ShippingStatus
-
-			// TODO: 外部APIからDBへ
-			ssr, err := APIShipmentStatus(getShipmentServiceURL(), &APIShipmentStatusReq{
-				ReserveID: ta.ReserveID,
-			})
-			if err != nil {
-				log.Print(err)
-				outputErrorMsg(w, http.StatusInternalServerError, "failed to request to shipment service")
-				tx.Rollback()
-				return
-			}
-			itemDetail.ShippingStatus = ssr.Status
+			itemDetail.ShippingStatus = ta.ShippingStatus
 		}
 
 		itemDetails = append(itemDetails, itemDetail)
