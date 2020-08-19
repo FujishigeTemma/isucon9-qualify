@@ -405,6 +405,16 @@ func getUser(r *http.Request) (user User, errCode int, errMsg string) {
 	return user, http.StatusOK, ""
 }
 
+func getUserID(r *http.Request) (userID int64, errCode int, errMsg string) {
+	session := getSession(r)
+	userIDRaw, ok := session.Values["user_id"]
+	if !ok {
+		return 0, http.StatusNotFound, "no session"
+	}
+
+	return userIDRaw.(int64), http.StatusOK, ""
+}
+
 func getUserSimpleByID(q sqlx.Queryer, userID int64) (userSimple UserSimple, err error) {
 	err = sqlx.Get(q, &userSimple, "SELECT id, account_name, num_sell_items FROM `users` WHERE `id` = ?", userID)
 	if err != nil {
@@ -669,6 +679,7 @@ func getNewCategoryItems(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// TODO find from memcache
 	var categoryIDs []int
 	err = dbx.Select(&categoryIDs, "SELECT id FROM `categories` WHERE parent_id=?", rootCategory.ID)
 	if err != nil {
@@ -1197,7 +1208,7 @@ func getItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, errCode, errMsg := getUser(r)
+	userID, errCode, errMsg := getUserID(r)
 	if errMsg != "" {
 		outputErrorMsg(w, errCode, errMsg)
 		return
@@ -1246,7 +1257,7 @@ func getItem(w http.ResponseWriter, r *http.Request) {
 		CreatedAt: item.CreatedAt.Unix(),
 	}
 
-	if (user.ID == item.SellerID || user.ID == item.BuyerID) && item.BuyerID != 0 {
+	if (userID == item.SellerID || userID == item.BuyerID) && item.BuyerID != 0 {
 		buyer, err := getUserSimpleByID(dbx, item.BuyerID)
 		if err != nil {
 			outputErrorMsg(w, http.StatusNotFound, "buyer not found")
