@@ -905,8 +905,8 @@ func getUserItems(w http.ResponseWriter, r *http.Request) {
 }
 
 type ItemWithTransaction struct {
-	Item                *Item                `db:"i"`
-	Te *TransactionEvidence `db:"t"`
+	Item *Item                `db:"i"`
+	Te   *TransactionEvidence `db:"t"`
 }
 
 func getTransactions(w http.ResponseWriter, r *http.Request) {
@@ -944,7 +944,7 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 	if itemID > 0 && createdAt > 0 {
 		// paging
 		err := tx.Select(&its,
-			"SELECT * FROM `items` AS i LEFT JOIN `transaction_evidences` AS t ON `items`.`id` = `transaction_evidences`.`item_id` WHERE (`seller_id` = ? OR `buyer_id` = ?) AND `status` IN (?,?,?,?,?) AND (`created_at` < ?  OR (`created_at` <= ? AND `id` < ?)) ORDER BY `created_at` DESC, `id` DESC LIMIT ?",
+			"SELECT * FROM `items` AS `i` LEFT JOIN `transaction_evidences` AS `t` ON `i`.`id` = `t`.`item_id` WHERE (`i`.`seller_id` = ? OR `i`.`buyer_id` = ?) AND `i`.`status` IN (?,?,?,?,?) AND (`i`.`created_at` < ?  OR (`i`.`created_at` <= ? AND `i`.`id` < ?)) ORDER BY `i`.`created_at` DESC, `i`.`id` DESC LIMIT ?",
 			user.ID,
 			user.ID,
 			ItemStatusOnSale,
@@ -966,7 +966,7 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 	} else {
 		// 1st page
 		err := tx.Select(&its,
-			"SELECT * FROM `items` AS i LEFT JOIN `transaction_evidences` AS t ON `items`.`id` = `transaction_evidences`.`item_id` WHERE (`seller_id` = ? OR `buyer_id` = ?) AND `status` IN (?,?,?,?,?) ORDER BY `created_at` DESC, `id` DESC LIMIT ?",
+			"SELECT * FROM `items` AS `i` LEFT JOIN `transaction_evidences` AS `t` ON `i`.`id` = `t`.`item_id` WHERE (`i`.`seller_id` = ? OR `i`.`buyer_id` = ?) AND `i`.`status` IN (?,?,?,?,?) ORDER BY `i`.`created_at` DESC, `i`.`id` DESC LIMIT ?",
 			user.ID,
 			user.ID,
 			ItemStatusOnSale,
