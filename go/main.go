@@ -914,7 +914,6 @@ type TransactionAdditions struct {
 func getShippingStatuses(tx *sqlx.Tx, w http.ResponseWriter, transactionEvidenceIDs []int64) (ssMap map[int64]string, hadErr bool) {
 	query, args, err := sqlx.In("SELECT * FROM `shippings` WHERE `transaction_evidence_id` IN (?)", transactionEvidenceIDs)
 	if err != nil {
-		log.Print(err)
 		outputErrorMsg(w, http.StatusInternalServerError, "query error")
 		tx.Rollback()
 		return ssMap, true
@@ -955,7 +954,6 @@ func getShippingStatuses(tx *sqlx.Tx, w http.ResponseWriter, transactionEvidence
 func getTransactionAdditions(tx *sqlx.Tx, w http.ResponseWriter, itemIDs []int64) (iMap map[int64]TransactionAdditions, hadErr bool) {
 	query, args, err := sqlx.In("SELECT id, status, item_id FROM `transaction_evidences` WHERE `item_id` IN (?)", itemIDs)
 	if err != nil {
-		log.Print(err)
 		outputErrorMsg(w, http.StatusInternalServerError, "query error")
 		tx.Rollback()
 		return iMap, true
@@ -1071,7 +1069,6 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 	for _, item := range items {
 		userIds = append(userIds, item.SellerID)
 		userIds = append(userIds, item.BuyerID)
-		itemIds = append(itemIds, item.ID)
 	}
 
 	userSimpleMap, err := getUserSimplesByIDs(tx, userIds)
