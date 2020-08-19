@@ -906,20 +906,8 @@ func getUserItems(w http.ResponseWriter, r *http.Request) {
 }
 
 type ItemWithTransaction struct {
-	ID          int64     `json:"id" db:"i.id"`
-	SellerID    int64     `json:"seller_id" db:"i.seller_id"`
-	BuyerID     int64     `json:"buyer_id" db:"i.buyer_id"`
-	Status      string    `json:"status" db:"i.status"`
-	Name        string    `json:"name" db:"i.name"`
-	Price       int       `json:"price" db:"i.price"`
-	Description string    `json:"description" db:"i.description"`
-	ImageName   string    `json:"image_name" db:"i.image_name"`
-	CategoryID  int       `json:"category_id" db:"i.category_id"`
-	CreatedAt   time.Time `json:"-" db:"i.created_at"`
-	UpdatedAt   time.Time `json:"-" db:"i.updated_at"`
-
-	TransactionEvidenceID     sql.NullInt64       `json:"transaction_evidence_id,omitempty" db:"t.id"`
-	TransactionEvidenceStatus sql.NullString      `json:"transaction_evidence_status,omitempty" db:"t.status"`
+	Item Item                `db:"i"`
+	Te   TransactionEvidence `db:"t"`
 }
 
 func getTransactions(w http.ResponseWriter, r *http.Request) {
@@ -1000,8 +988,8 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 
 	userIds := make([]int64, 0, len(its)*2)
 	for _, it := range its {
-		userIds = append(userIds, it.SellerID)
-		userIds = append(userIds, it.BuyerID)
+		userIds = append(userIds, it.Item.SellerID)
+		userIds = append(userIds, it.Item.BuyerID)
 	}
 	userSimpleMap, err := getUserSimplesByIDs(tx, userIds)
 	if err != nil {
@@ -1012,8 +1000,12 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 
 	itemDetails := make([]ItemDetail, 0, len(its))
 	for _, it := range its {
-		seller := userSimpleMap[it.SellerID]
-		category, err := getCategoryByID(it.CategoryID)
+		item := it.Item
+		transactionEvidenceID := it.Te.ID
+		transactionEvidenceStatus := it.Te.Status
+
+		seller := userSimpleMap[item.SellerID]
+		category, err := getCategoryByID(item.CategoryID)
 		if err != nil {
 			outputErrorMsg(w, http.StatusNotFound, "category not found")
 			tx.Rollback()
@@ -1021,35 +1013,33 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 		}
 
 		itemDetail := ItemDetail{
-			ID:       it.ID,
-			SellerID: it.SellerID,
+			ID:       item.ID,
+			SellerID: item.SellerID,
 			Seller:   &seller,
 			// BuyerID
 			// Buyer
-			Status:      it.Status,
-			Name:        it.Name,
-			Price:       it.Price,
-			Description: it.Description,
-			ImageURL:    getImageURL(it.ImageName),
-			CategoryID:  it.CategoryID,
+			Status:      item.Status,
+			Name:        item.Name,
+			Price:       item.Price,
+			Description: item.Description,
+			ImageURL:    getImageURL(item.ImageName),
+			CategoryID:  item.CategoryID,
 			// TransactionEvidenceID
 			// TransactionEvidenceStatus
 			// ShippingStatus
 			Category:  &category,
-			CreatedAt: it.CreatedAt.Unix(),
+			CreatedAt: item.CreatedAt.Unix(),
 		}
 
-		if it.BuyerID != 0 {
-			buyer := userSimpleMap[it.BuyerID]
-			itemDetail.BuyerID = it.BuyerID
+		if item.BuyerID != 0 {
+			buyer := userSimpleMap[item.BuyerID]
+			itemDetail.BuyerID = item.BuyerID
 			itemDetail.Buyer = &buyer
 		}
 
-		transactionEvidenceID := it.TransactionEvidenceID
-		transactionEvidenceStatus := it.TransactionEvidenceStatus
-		if transactionEvidenceID.Valid && transactionEvidenceID.Int64 > 0 {
+		if transactionEvidenceID > 0 {
 			shipping := Shipping{}
-			err = tx.Get(&shipping, "SELECT * FROM `shippings` WHERE `transaction_evidence_id` = ?", transactionEvidenceID.Value)
+			err = tx.Get(&shipping, "SELECT * FROM `shippings` WHERE `transaction_evidence_id` = ?", transactionEvidenceID)
 			if err == sql.ErrNoRows {
 				outputErrorMsg(w, http.StatusNotFound, "shipping not found")
 				tx.Rollback()
@@ -1072,8 +1062,8 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
-			itemDetail.TransactionEvidenceID = transactionEvidenceID.Int64
-			itemDetail.TransactionEvidenceStatus = transactionEvidenceStatus.String
+			itemDetail.TransactionEvidenceID = transactionEvidenceID
+			itemDetail.TransactionEvidenceStatus = transactionEvidenceStatus
 			itemDetail.ShippingStatus = ssr.Status
 		}
 
