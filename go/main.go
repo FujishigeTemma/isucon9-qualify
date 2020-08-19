@@ -18,6 +18,7 @@ import (
 
 	_ "net/http/pprof"
 
+	sqlxselect "github.com/cs3238-tsuzu/sqlx-selector/v2"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/gorilla/sessions"
 	"github.com/jmoiron/sqlx"
@@ -941,11 +942,12 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 
 	tx := dbx.MustBegin()
 	its := []ItemWithTransaction{}
+
+	selectStr := sqlxselect.New(&ItemWithTransaction{}).SelectStructAs("i.*", "i.*").SelectStructAs("t.*", "t.*").String()
 	if itemID > 0 && createdAt > 0 {
 		// paging
 		err := tx.Select(&its,
-			"SELECT * FROM `items` AS `i` LEFT JOIN `transaction_evidences` AS `t` ON `i`.`id` = `t`.`item_id` WHERE (`i`.`seller_id` = ? OR `i`.`buyer_id` = ?) AND `i`.`status` IN (?,?,?,?,?) AND (`i`.`created_at` < ?  OR (`i`.`created_at` <= ? AND `i`.`id` < ?)) ORDER BY `i`.`created_at` DESC, `i`.`id` DESC LIMIT ?",
-			user.ID,
+			"SELECT "+selectStr+" FROM `items` AS `i` LEFT JOIN `transaction_evidences` AS `t` ON `i`.`id` = `t`.`item_id` WHERE (`i`.`seller_id` = ? OR `i`.`buyer_id` = ?) AND `i`.`status` IN (?,?,?,?,?) AND (`i`.`created_at` < ?  OR (`i`.`created_at` <= ? AND `i`.`id` < ?)) ORDER BY `i`.`created_at` DESC, `i`.`id` DESC LIMIT ?",
 			user.ID,
 			ItemStatusOnSale,
 			ItemStatusTrading,
@@ -966,7 +968,7 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 	} else {
 		// 1st page
 		err := tx.Select(&its,
-			"SELECT * FROM `items` AS `i` LEFT JOIN `transaction_evidences` AS `t` ON `i`.`id` = `t`.`item_id` WHERE (`i`.`seller_id` = ? OR `i`.`buyer_id` = ?) AND `i`.`status` IN (?,?,?,?,?) ORDER BY `i`.`created_at` DESC, `i`.`id` DESC LIMIT ?",
+			"SELECT "+selectStr+" FROM `items` AS `i` LEFT JOIN `transaction_evidences` AS `t` ON `i`.`id` = `t`.`item_id` WHERE (`i`.`seller_id` = ? OR `i`.`buyer_id` = ?) AND `i`.`status` IN (?,?,?,?,?) ORDER BY `i`.`created_at` DESC, `i`.`id` DESC LIMIT ?",
 			user.ID,
 			user.ID,
 			ItemStatusOnSale,
