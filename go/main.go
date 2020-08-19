@@ -947,7 +947,7 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 	tx := dbx.MustBegin()
 	its := []ItemWithTransaction{}
 
-	selectStr := sqlxselect.New(&ItemWithTransaction{}).SelectStructAs("i.*", "i.*").SelectStructAs("t.*", "t.*", "id", "status").String()
+	selectStr := sqlxselect.New(&ItemWithTransaction{}).SelectStructAs("i.*", "i.*").SelectStructAs("t.*", "t.*").String()
 	if itemID > 0 && createdAt > 0 {
 		// paging
 		err := tx.Select(&its,
