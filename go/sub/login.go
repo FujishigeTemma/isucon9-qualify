@@ -71,8 +71,6 @@ func auth(w http.ResponseWriter, r *http.Request) {
 	}
 
 	u := User{}
-	fmt.Println(u)
-	fmt.Println(&u)
 	err = dbx.Get(&u, "SELECT * FROM `users` WHERE `account_name` = ?", accountName)
 	if err == sql.ErrNoRows {
 		outputErrorMsg(w, http.StatusUnauthorized, "アカウント名かパスワードが間違えています")
