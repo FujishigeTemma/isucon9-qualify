@@ -96,9 +96,7 @@ func auth(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json;charset=utf-8")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(struct {
-		User User `json:"user"`
-	}{User: u})
+	json.NewEncoder(w).Encode(u)
 }
 
 func outputErrorMsg(w http.ResponseWriter, status int, msg string) {
