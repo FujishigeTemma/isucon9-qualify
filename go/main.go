@@ -962,10 +962,7 @@ func getTransactionAdditions(tx *sqlx.Tx, w http.ResponseWriter, itemIDs []int64
 
 	tas := []TransactionAdditions{}
 	err = sqlx.Select(tx, &tas, query, args...)
-	if err == sql.ErrNoRows {
-		return make(map[int64]TransactionAdditions), true
-	}
-	if err != nil {
+	if err != nil && err != sql.ErrNoRows {
 		// It's able to ignore ErrNoRows
 		log.Print(err)
 		outputErrorMsg(w, http.StatusInternalServerError, "db error")
