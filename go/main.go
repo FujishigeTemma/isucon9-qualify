@@ -910,6 +910,20 @@ type TransactionAdditions struct {
 	TransactionEvidenceStatus string `json:"status" db:"status"`
 	ShippingStatus            string `db:"-"`
 }
+type APIShippingStatus struct {
+	Status string
+	err    error
+}
+
+func requestShippingStatus(reserveID string, res chan<- APIShippingStatus) {
+	ssr, err := APIShipmentStatus(getShipmentServiceURL(), &APIShipmentStatusReq{
+		ReserveID: reserveID,
+	})
+	res <- APIShippingStatus{
+		Status: ssr.Status,
+		err:    err,
+	}
+}
 
 func getShippingStatuses(tx *sqlx.Tx, w http.ResponseWriter, transactionEvidenceIDs []int64) (ssMap map[int64]string, hadErr bool) {
 	query, args, err := sqlx.In("SELECT * FROM `shippings` WHERE `transaction_evidence_id` IN (?)", transactionEvidenceIDs)
@@ -935,19 +949,22 @@ func getShippingStatuses(tx *sqlx.Tx, w http.ResponseWriter, transactionEvidence
 		return ssMap, true
 	}
 
+	chs := make([]chan APIShippingStatus, len(shippings))
+	for i, s := range shippings {
+		go requestShippingStatus(s.ReserveID, chs[i])
+	}
+
 	ssMap = make(map[int64]string)
-	for _, s := range shippings {
-		ssr, err := APIShipmentStatus(getShipmentServiceURL(), &APIShipmentStatusReq{
-			ReserveID: s.ReserveID,
-		})
-		if err != nil {
-			log.Print(err)
+	for i, s := range shippings {
+		res := <-chs[i]
+		if res.err != nil {
+			log.Print(res.err)
 			outputErrorMsg(w, http.StatusInternalServerError, "failed to request to shipment service")
 			tx.Rollback()
 			return ssMap, true
 		}
 
-		ssMap[s.TransactionEvidenceID] = ssr.Status
+		ssMap[s.TransactionEvidenceID] = res.Status
 	}
 	return ssMap, false
 }
