@@ -351,7 +351,7 @@ func main() {
 	mux.HandleFunc(pat.Post("/register"), postRegister)
 	mux.HandleFunc(pat.Get("/reports.json"), getReports)
 	// Frontend
-	mux.HandleFunc(pat.Get("/"), getIndex)
+	// mux.HandleFunc(pat.Get("/"), getIndex)
 	mux.HandleFunc(pat.Get("/login"), getIndex)
 	mux.HandleFunc(pat.Get("/register"), getIndex)
 	mux.HandleFunc(pat.Get("/timeline"), getIndex)
