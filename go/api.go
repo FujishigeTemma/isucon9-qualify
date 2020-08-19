@@ -198,10 +198,10 @@ func APIAuthCheck(body *io.ReadCloser) (*User, int) {
 	//
 	//	return &User{}, http.StatusInternalServerError
 	//}
-	res, err := http.Post("172.16.0.162:8080/auth", "application/json", *body)
+	res, err := http.Post("http://172.16.0.162:8080/auth", "application/json", *body)
 	if err != nil {
 		log.Print(err)
-
+		fmt.Println(err)
 		return &User{}, http.StatusInternalServerError
 	}
 	defer res.Body.Close()
@@ -209,7 +209,7 @@ func APIAuthCheck(body *io.ReadCloser) (*User, int) {
 	u := &User{}
 	if err = json.NewDecoder(res.Body).Decode(&u); err != nil {
 		log.Print(err)
-
+		fmt.Println(err)
 		return &User{}, http.StatusInternalServerError
 	}
 
