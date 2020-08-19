@@ -904,11 +904,6 @@ func getUserItems(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(rui)
 }
 
-type ItemWithTransaction struct {
-	Item                *Item                `db:"i"`
-	Te *TransactionEvidence `db:"t"`
-}
-
 func getTransactions(w http.ResponseWriter, r *http.Request) {
 
 	user, errCode, errMsg := getUser(r)
@@ -940,11 +935,11 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	tx := dbx.MustBegin()
-	its := []ItemWithTransaction{}
+	items := []Item{}
 	if itemID > 0 && createdAt > 0 {
 		// paging
-		err := tx.Select(&its,
-			"SELECT * FROM `items` AS i LEFT JOIN `transaction_evidences` AS t ON `items`.`id` = `transaction_evidences`.`item_id` WHERE (`seller_id` = ? OR `buyer_id` = ?) AND `status` IN (?,?,?,?,?) AND (`created_at` < ?  OR (`created_at` <= ? AND `id` < ?)) ORDER BY `created_at` DESC, `id` DESC LIMIT ?",
+		err := tx.Select(&items,
+			"SELECT * FROM `items` WHERE (`seller_id` = ? OR `buyer_id` = ?) AND `status` IN (?,?,?,?,?) AND (`created_at` < ?  OR (`created_at` <= ? AND `id` < ?)) ORDER BY `created_at` DESC, `id` DESC LIMIT ?",
 			user.ID,
 			user.ID,
 			ItemStatusOnSale,
@@ -965,8 +960,8 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		// 1st page
-		err := tx.Select(&its,
-			"SELECT * FROM `items` AS i LEFT JOIN `transaction_evidences` AS t ON `items`.`id` = `transaction_evidences`.`item_id` WHERE (`seller_id` = ? OR `buyer_id` = ?) AND `status` IN (?,?,?,?,?) ORDER BY `created_at` DESC, `id` DESC LIMIT ?",
+		err := tx.Select(&items,
+			"SELECT * FROM `items` WHERE (`seller_id` = ? OR `buyer_id` = ?) AND `status` IN (?,?,?,?,?) ORDER BY `created_at` DESC, `id` DESC LIMIT ?",
 			user.ID,
 			user.ID,
 			ItemStatusOnSale,
@@ -984,10 +979,10 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	userIds := make([]int64, 0, len(its)*2)
-	for _, it := range its {
-		userIds = append(userIds, it.Item.SellerID)
-		userIds = append(userIds, it.Item.BuyerID)
+	userIds := make([]int64, 0, len(items)*2)
+	for _, item := range items {
+		userIds = append(userIds, item.SellerID)
+		userIds = append(userIds, item.BuyerID)
 	}
 	userSimpleMap, err := getUserSimplesByIDs(tx, userIds)
 	if err != nil {
@@ -996,11 +991,8 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	itemDetails := make([]ItemDetail, 0, len(its))
-	for _, it := range its {
-		item := it.Item
-		transactionEvidence := it.Te
-
+	itemDetails := make([]ItemDetail, 0, len(items))
+	for _, item := range items {
 		seller := userSimpleMap[item.SellerID]
 		category, err := getCategoryByID(item.CategoryID)
 		if err != nil {
@@ -1032,6 +1024,16 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 			buyer := userSimpleMap[item.BuyerID]
 			itemDetail.BuyerID = item.BuyerID
 			itemDetail.Buyer = &buyer
+		}
+
+		transactionEvidence := TransactionEvidence{}
+		err = tx.Get(&transactionEvidence, "SELECT * FROM `transaction_evidences` WHERE `item_id` = ?", item.ID)
+		if err != nil && err != sql.ErrNoRows {
+			// It's able to ignore ErrNoRows
+			log.Print(err)
+			outputErrorMsg(w, http.StatusInternalServerError, "db error")
+			tx.Rollback()
+			return
 		}
 
 		if transactionEvidence.ID > 0 {
