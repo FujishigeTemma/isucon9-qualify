@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 )
@@ -181,4 +182,21 @@ func APIShipmentStatus(shipmentURL string, param *APIShipmentStatusReq) (*APIShi
 	}
 
 	return ssr, nil
+}
+
+func APIAuthCheck(authURL string, body *io.ReadCloser) (*User, int) {
+	req, err := http.NewRequest(http.MethodGet, authURL, *body)
+	if err != nil {
+		return &User{}, http.StatusInternalServerError
+	}
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return &User{}, http.StatusInternalServerError
+	}
+	defer res.Body.Close()
+
+	u := &User{}
+	err = json.NewDecoder(res.Body).Decode(&u)
+
+	return u, res.StatusCode
 }
