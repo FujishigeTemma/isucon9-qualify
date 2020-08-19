@@ -43,6 +43,12 @@ COMMIT_HASH:=0
 ##
 all: build
 
+.PHONY: push
+push:
+	@git add .
+	@git commit -m "changes from server"
+	@git push
+
 .PHONY: update
 update: pull build restart curl
 
