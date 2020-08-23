@@ -875,10 +875,15 @@ type APIShippingStatus struct {
 }
 
 // ""が返ってきたときにAPIをたたく必要あり
-func checkShippingStatusWithCache(transactionEvidenceID int64, status string) string {
+func checkShippingStatusWithCacheShipping(transactionEvidenceID int64, status string) string {
 	if status != ShippingsStatusShipping {
 		return status
 	}
+	return checkShippingStatusWithCacheAny(transactionEvidenceID)
+}
+
+// ""が返ってきたときにAPIをたたく必要あり
+func checkShippingStatusWithCacheAny(transactionEvidenceID int64) string {
 	_, isDone := doneTransactionEvidences[transactionEvidenceID]
 	if isDone {
 		return ShippingsStatusDone
@@ -961,7 +966,7 @@ func getShippingStatuses(tx *sqlx.Tx, w http.ResponseWriter, transactionEvidence
 	wg := sync.WaitGroup{}
 
 	for _, s := range shippings {
-		status := checkShippingStatusWithCache(s.TransactionEvidenceID, s.Status)
+		status := checkShippingStatusWithCacheShipping(s.TransactionEvidenceID, s.Status)
 		if status == "" {
 			wg.Add(1)
 			go requestShippingStatus(s.TransactionEvidenceID, s.ReserveID, &resMap, &wg)
@@ -1839,7 +1844,7 @@ func postShipDone(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	status := checkShippingStatusWithCache(shipping.TransactionEvidenceID, shipping.Status)
+	status := checkShippingStatusWithCacheAny(shipping.TransactionEvidenceID)
 	if status == "" {
 		status, err = checkShippingStatusWithAPI(shipping.TransactionEvidenceID, shipping.ReserveID)
 		if err != nil {
