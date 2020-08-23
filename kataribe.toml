@@ -85,9 +85,21 @@ regexp = '^GET /users/transactions.json'
 name = "GET /users/transactions.json"
 
 [[bundle]]
+regexp = '^GET /users/.*\.json'
+name = 'GET /users/*.json'
+
+[[bundle]]
+regexp = '^GET /new_items.json\?created_at=.*&item_id=.*'
+name = 'GET /new_items.json?created_at=*&item_id=*'
+
+[[bundle]]
 regexp = '^GET /new_items/'
 name = 'GET /new_items/*.json'
 
 [[bundle]]
 regexp = '^GET /items/'
 name = 'GET /items/*.json'
+
+[[bundle]]
+regexp = '^GET /transactions/'
+name = 'GET /transactions/*.png'
