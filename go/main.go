@@ -1235,21 +1235,25 @@ func getItem(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if transactionEvidence.ID > 0 {
-			shipping := Shipping{}
-			err = dbx.Get(&shipping, "SELECT * FROM `shippings` WHERE `transaction_evidence_id` = ?", transactionEvidence.ID)
-			if err == sql.ErrNoRows {
-				outputErrorMsg(w, http.StatusNotFound, "shipping not found")
-				return
-			}
-			if err != nil {
-				log.Print(err)
-				outputErrorMsg(w, http.StatusInternalServerError, "db error")
-				return
-			}
-
 			itemDetail.TransactionEvidenceID = transactionEvidence.ID
 			itemDetail.TransactionEvidenceStatus = transactionEvidence.Status
-			itemDetail.ShippingStatus = shipping.Status
+
+			if transactionEvidence.Status == TransactionEvidenceStatusDone {
+				itemDetail.ShippingStatus = ShippingsStatusDone
+			} else {
+				shipping := Shipping{}
+				err = dbx.Get(&shipping, "SELECT * FROM `shippings` WHERE `transaction_evidence_id` = ?", transactionEvidence.ID)
+				if err == sql.ErrNoRows {
+					outputErrorMsg(w, http.StatusNotFound, "shipping not found")
+					return
+				}
+				if err != nil {
+					log.Print(err)
+					outputErrorMsg(w, http.StatusInternalServerError, "db error")
+					return
+				}
+				itemDetail.ShippingStatus = shipping.Status
+			}
 		}
 	}
 
