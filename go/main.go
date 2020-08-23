@@ -71,6 +71,7 @@ var (
 	store                    sessions.Store
 	categoryCache            map[int]Category
 	doneTransactionEvidences map[int64]struct{}
+	buyingMap BuyingMap
 
 	paymentServiceURL  = DefaultPaymentServiceURL
 	shipmentServiceURL = DefaultShipmentServiceURL
@@ -327,6 +328,7 @@ func main() {
 
 	categoryCache = make(map[int]Category)
 	doneTransactionEvidences = make(map[int64]struct{})
+	buyingMap = NewBuyingMap()
 
 	mux := goji.NewMux()
 
@@ -1455,6 +1457,24 @@ type BuyItem struct {
 	SellerName      string `db:"u_account_name"`
 }
 
+type BuyingMap struct {
+	s sync.Map
+}
+
+func NewBuyingMap() BuyingMap {
+	return BuyingMap{}
+}
+func (s *BuyingMap) Add(key int64) {
+	s.s.Store(key, struct{}{})
+}
+func (s *BuyingMap) Delete(key int64) {
+	s.s.Delete(key)
+}
+func (s *BuyingMap) Has(key int64) bool {
+	_, ok := s.s.Load(key)
+	return ok
+}
+
 func postBuy(w http.ResponseWriter, r *http.Request) {
 	rb := reqBuy{}
 
@@ -1475,6 +1495,14 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 		outputErrorMsg(w, errCode, errMsg)
 		return
 	}
+
+	if (buyingMap.Has(rb.ItemID)) {
+		outputErrorMsg(w, http.StatusTooManyRequests, "now pending")
+		return
+	}
+
+	buyingMap.Add(rb.ItemID)
+	defer buyingMap.Delete(rb.ItemID)
 
 	tx := dbx.MustBegin()
 
