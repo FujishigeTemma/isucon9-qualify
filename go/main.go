@@ -67,11 +67,12 @@ const (
 )
 
 var (
-	dbx           *sqlx.DB
-	store         sessions.Store
-	categoryCache map[int]Category
+	dbx                      *sqlx.DB
+	store                    sessions.Store
+	categoryCache            map[int]Category
+	doneTransactionEvidences map[int64]struct{}
 
-	paymentServiceURL = DefaultPaymentServiceURL
+	paymentServiceURL  = DefaultPaymentServiceURL
 	shipmentServiceURL = DefaultShipmentServiceURL
 )
 
@@ -872,23 +873,45 @@ type APIShippingStatus struct {
 	err    error
 }
 
-func requestShippingStatus(transactionEvidenceID int64, reserveID string, m *APIShippingStatusMap, wg *sync.WaitGroup) {
-	defer wg.Done()
+// ""が返ってきたときにAPIをたたく必要あり
+func checkShippingStatusWithCache(transactionEvidenceID int64, status string) string {
+	if status != ShippingsStatusShipping {
+		return status
+	}
+	_, isDone := doneTransactionEvidences[transactionEvidenceID]
+	if isDone {
+		return ShippingsStatusDone
+	}
+	return ""
+}
+
+func checkShippingStatusWithAPI(transactionEvidenceID int64, reserveID string) (string, error) {
 	ssr, err := APIShipmentStatus(shipmentServiceURL, &APIShipmentStatusReq{
 		ReserveID: reserveID,
 	})
 	if err != nil {
+		return "", err
+	}
+
+	if ssr.Status == ShippingsStatusDone {
+		doneTransactionEvidences[transactionEvidenceID] = struct{}{}
+	}
+	return ssr.Status, nil
+}
+
+func requestShippingStatus(transactionEvidenceID int64, reserveID string, m *APIShippingStatusMap, wg *sync.WaitGroup) {
+	defer wg.Done()
+	status, err := checkShippingStatusWithAPI(transactionEvidenceID, reserveID)
+	if err != nil {
 		for i := 0; i < 3; i++ {
-			ssr, err = APIShipmentStatus(shipmentServiceURL, &APIShipmentStatusReq{
-				ReserveID: reserveID,
-			})
+			status, err = checkShippingStatusWithAPI(transactionEvidenceID, reserveID)
 			if err == nil {
 				break
 			}
 		}
 	}
 	m.Store(transactionEvidenceID, APIShippingStatus{
-		Status: ssr.Status,
+		Status: status,
 		err:    err,
 	})
 }
@@ -936,9 +959,12 @@ func getShippingStatuses(tx *sqlx.Tx, w http.ResponseWriter, transactionEvidence
 	wg := sync.WaitGroup{}
 
 	for _, s := range shippings {
-		if s.Status == ShippingsStatusShipping {
+		status := checkShippingStatusWithCache(s.TransactionEvidenceID, s.Status)
+		if status == "" {
 			wg.Add(1)
 			go requestShippingStatus(s.TransactionEvidenceID, s.ReserveID, &resMap, &wg)
+		} else {
+			ssMap[s.TransactionEvidenceID] = status
 		}
 	}
 
@@ -946,7 +972,8 @@ func getShippingStatuses(tx *sqlx.Tx, w http.ResponseWriter, transactionEvidence
 
 	ssMap = make(map[int64]string)
 	for _, s := range shippings {
-		if s.Status == ShippingsStatusShipping {
+		_, exists := ssMap[s.TransactionEvidenceID]
+		if !exists {
 			val, _ := resMap.Load(s.TransactionEvidenceID)
 			if val.err != nil {
 				log.Print(val.err)
@@ -955,8 +982,6 @@ func getShippingStatuses(tx *sqlx.Tx, w http.ResponseWriter, transactionEvidence
 				return ssMap, true
 			}
 			ssMap[s.TransactionEvidenceID] = val.Status
-		} else {
-			ssMap[s.TransactionEvidenceID] = s.Status
 		}
 	}
 
@@ -1813,11 +1838,9 @@ func postShipDone(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	status := ShippingsStatusDone
-	if shipping.Status != ShippingsStatusDone {
-		ssr, err := APIShipmentStatus(shipmentServiceURL, &APIShipmentStatusReq{
-			ReserveID: shipping.ReserveID,
-		})
+	status := checkShippingStatusWithCache(shipping.TransactionEvidenceID, shipping.Status)
+	if status == "" {
+		status, err = checkShippingStatusWithAPI(shipping.TransactionEvidenceID, shipping.ReserveID)
 		if err != nil {
 			log.Print(err)
 			outputErrorMsg(w, http.StatusInternalServerError, "failed to request to shipment service")
@@ -1825,7 +1848,6 @@ func postShipDone(w http.ResponseWriter, r *http.Request) {
 
 			return
 		}
-		status = ssr.Status
 	}
 
 	if !(status == ShippingsStatusShipping || status == ShippingsStatusDone) {
