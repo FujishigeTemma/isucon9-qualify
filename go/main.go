@@ -1470,7 +1470,7 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	buyer, errCode, errMsg := getUser(r)
+	buyerID, errCode, errMsg := getUserID(r)
 	if errMsg != "" {
 		outputErrorMsg(w, errCode, errMsg)
 		return
@@ -1499,7 +1499,7 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if buyItem.SellerID == buyer.ID {
+	if buyItem.SellerID == buyerID {
 		outputErrorMsg(w, http.StatusForbidden, "自分の商品は買えません")
 		tx.Rollback()
 		return
@@ -1517,6 +1517,12 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 	if rb.Token == "" {
 		outputErrorMsg(w, http.StatusBadRequest, "カード情報に誤りがあります")
 		tx.Rollback()
+		return
+	}
+
+	buyer, errCode, errMsg := getUser(r)
+	if errMsg != "" {
+		outputErrorMsg(w, errCode, errMsg)
 		return
 	}
 
