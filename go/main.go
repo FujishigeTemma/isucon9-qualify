@@ -1432,15 +1432,15 @@ func getQRCode(w http.ResponseWriter, r *http.Request) {
 }
 
 type BuyItem struct {
-	SellerID        int64  `db:"i.seller_id"`
-	ItemID          int64  `db:"i.id"`
-	Status          string `db:"i.status"`
-	ItemName        string `db:"i.name"`
-	ItemPrice       int    `db:"i.price"`
-	ItemDescription string `db:"i.description"`
-	CategoryID      int    `db:"i.category_id"`
-	SellerAddress   string `db:"u.address"`
-	SellerName      string `db:"u.account_name"`
+	SellerID        int64  `db:"i_seller_id"`
+	ItemID          int64  `db:"i_id"`
+	Status          string `db:"i_status"`
+	ItemName        string `db:"i_name"`
+	ItemPrice       int    `db:"i_price"`
+	ItemDescription string `db:"i_description"`
+	CategoryID      int    `db:"i_category_id"`
+	SellerAddress   string `db:"u_address"`
+	SellerName      string `db:"u_account_name"`
 }
 
 func postBuy(w http.ResponseWriter, r *http.Request) {
@@ -1467,7 +1467,7 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 	tx := dbx.MustBegin()
 
 	buyItem := BuyItem{}
-	err = tx.Get(&buyItem, "SELECT `i`.`seller_id`, `i`.`id`, `i`.`status`, `i`.`name`, `i`.`price`, `i`.`description`, `i`.`category_id`, `u`.`address`, `u`.`account_name` FROM `items` as `i` JOIN `users` as `u` ON `i`.`seller_id` = `u`.`id` WHERE `i`.`id` = ? FOR UPDATE", rb.ItemID)
+	err = tx.Get(&buyItem, "SELECT `i`.`seller_id` as i_seller_id, `i`.`id` as i_id, `i`.`status` as i_status, `i`.`name` as i_name, `i`.`price` as i_price, `i`.`description` as i_description, `i`.`category_id` as i_category_id, `u`.`address` as u_address, `u`.`account_name` as u_account_name FROM `items` as `i` JOIN `users` as `u` ON `i`.`seller_id` = `u`.`id` WHERE `i`.`id` = ? FOR UPDATE", rb.ItemID)
 	if err == sql.ErrNoRows {
 		outputErrorMsg(w, http.StatusNotFound, "item or item seller not found")
 		tx.Rollback()
