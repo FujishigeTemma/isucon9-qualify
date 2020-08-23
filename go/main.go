@@ -70,12 +70,10 @@ var (
 	dbx           *sqlx.DB
 	store         sessions.Store
 	categoryCache map[int]Category
-)
 
-type Config struct {
-	Name string `json:"name" db:"name"`
-	Val  string `json:"val" db:"val"`
-}
+	paymentServiceURL = DefaultPaymentServiceURL
+	shipmentServiceURL = DefaultShipmentServiceURL
+)
 
 type User struct {
 	ID             int64     `json:"id" db:"id"`
@@ -443,35 +441,6 @@ func getCategoryByID(categoryID int) (category Category, err error) {
 	return category, err
 }
 
-func getConfigByName(name string) (string, error) {
-	config := Config{}
-	err := dbx.Get(&config, "SELECT * FROM `configs` WHERE `name` = ?", name)
-	if err == sql.ErrNoRows {
-		return "", nil
-	}
-	if err != nil {
-		log.Print(err)
-		return "", err
-	}
-	return config.Val, err
-}
-
-func getPaymentServiceURL() string {
-	val, _ := getConfigByName("payment_service_url")
-	if val == "" {
-		return DefaultPaymentServiceURL
-	}
-	return val
-}
-
-func getShipmentServiceURL() string {
-	val, _ := getConfigByName("shipment_service_url")
-	if val == "" {
-		return DefaultShipmentServiceURL
-	}
-	return val
-}
-
 func postInitialize(w http.ResponseWriter, r *http.Request) {
 	ri := reqInitialize{}
 
@@ -490,25 +459,12 @@ func postInitialize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err = dbx.Exec(
-		"INSERT INTO `configs` (`name`, `val`) VALUES (?, ?) ON DUPLICATE KEY UPDATE `val` = VALUES(`val`)",
-		"payment_service_url",
-		ri.PaymentServiceURL,
-	)
-	if err != nil {
-		log.Print(err)
-		outputErrorMsg(w, http.StatusInternalServerError, "db error")
-		return
+	// configのメモリキャッシュ
+	if ri.PaymentServiceURL != "" {
+		paymentServiceURL = ri.PaymentServiceURL
 	}
-	_, err = dbx.Exec(
-		"INSERT INTO `configs` (`name`, `val`) VALUES (?, ?) ON DUPLICATE KEY UPDATE `val` = VALUES(`val`)",
-		"shipment_service_url",
-		ri.ShipmentServiceURL,
-	)
-	if err != nil {
-		log.Print(err)
-		outputErrorMsg(w, http.StatusInternalServerError, "db error")
-		return
+	if ri.ShipmentServiceURL != "" {
+		shipmentServiceURL = ri.ShipmentServiceURL
 	}
 
 	// categoryのメモリキャッシュ
@@ -918,12 +874,12 @@ type APIShippingStatus struct {
 
 func requestShippingStatus(transactionEvidenceID int64, reserveID string, m *APIShippingStatusMap, wg *sync.WaitGroup) {
 	defer wg.Done()
-	ssr, err := APIShipmentStatus(getShipmentServiceURL(), &APIShipmentStatusReq{
+	ssr, err := APIShipmentStatus(shipmentServiceURL, &APIShipmentStatusReq{
 		ReserveID: reserveID,
 	})
 	if err != nil {
 		for i := 0; i < 3; i++ {
-			ssr, err = APIShipmentStatus(getShipmentServiceURL(), &APIShipmentStatusReq{
+			ssr, err = APIShipmentStatus(shipmentServiceURL, &APIShipmentStatusReq{
 				ReserveID: reserveID,
 			})
 			if err == nil {
@@ -1586,7 +1542,7 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 	scrChan := make(chan ScrStruct)
 	pstrChan := make(chan PstrStruct)
 	go func() {
-		scr, err := APIShipmentCreate(getShipmentServiceURL(), &APIShipmentCreateReq{
+		scr, err := APIShipmentCreate(shipmentServiceURL, &APIShipmentCreateReq{
 			ToAddress:   buyer.Address,
 			ToName:      buyer.AccountName,
 			FromAddress: buyItem.SellerAddress,
@@ -1599,7 +1555,7 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 		scrChan <- str
 	}()
 	go func() {
-		pstr, err := APIPaymentToken(getPaymentServiceURL(), &APIPaymentServiceTokenReq{
+		pstr, err := APIPaymentToken(paymentServiceURL, &APIPaymentServiceTokenReq{
 			ShopID: PaymentServiceIsucariShopID,
 			Token:  rb.Token,
 			APIKey: PaymentServiceIsucariAPIKey,
@@ -1747,7 +1703,7 @@ func postShip(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	img, err := APIShipmentRequest(getShipmentServiceURL(), &APIShipmentRequestReq{
+	img, err := APIShipmentRequest(shipmentServiceURL, &APIShipmentRequestReq{
 		ReserveID: shipping.ReserveID,
 	})
 	if err != nil {
@@ -1853,7 +1809,7 @@ func postShipDone(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ssr, err := APIShipmentStatus(getShipmentServiceURL(), &APIShipmentStatusReq{
+	ssr, err := APIShipmentStatus(shipmentServiceURL, &APIShipmentStatusReq{
 		ReserveID: shipping.ReserveID,
 	})
 	if err != nil {
@@ -2272,7 +2228,7 @@ func getSettings(w http.ResponseWriter, r *http.Request) {
 		ress.User = &user
 	}
 
-	ress.PaymentServiceURL = getPaymentServiceURL()
+	ress.PaymentServiceURL = paymentServiceURL
 
 	categories := make([]Category, 0, len(categoryCache))
 	for _, category := range categoryCache {
