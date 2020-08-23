@@ -936,7 +936,7 @@ func getShippingStatuses(tx *sqlx.Tx, w http.ResponseWriter, transactionEvidence
 	wg := sync.WaitGroup{}
 
 	for _, s := range shippings {
-		if s.Status == "shipping" {
+		if s.Status == ShippingsStatusShipping {
 			wg.Add(1)
 			go requestShippingStatus(s.TransactionEvidenceID, s.ReserveID, &resMap, &wg)
 		}
@@ -946,7 +946,7 @@ func getShippingStatuses(tx *sqlx.Tx, w http.ResponseWriter, transactionEvidence
 
 	ssMap = make(map[int64]string)
 	for _, s := range shippings {
-		if s.Status == "shipping" {
+		if s.Status == ShippingsStatusShipping {
 			val, _ := resMap.Load(s.TransactionEvidenceID)
 			if val.err != nil {
 				log.Print(val.err)
@@ -1809,25 +1809,29 @@ func postShipDone(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ssr, err := APIShipmentStatus(shipmentServiceURL, &APIShipmentStatusReq{
-		ReserveID: shipping.ReserveID,
-	})
-	if err != nil {
-		log.Print(err)
-		outputErrorMsg(w, http.StatusInternalServerError, "failed to request to shipment service")
-		tx.Rollback()
+	status := ShippingsStatusDone
+	if shipping.Status != ShippingsStatusDone {
+		ssr, err := APIShipmentStatus(shipmentServiceURL, &APIShipmentStatusReq{
+			ReserveID: shipping.ReserveID,
+		})
+		if err != nil {
+			log.Print(err)
+			outputErrorMsg(w, http.StatusInternalServerError, "failed to request to shipment service")
+			tx.Rollback()
 
-		return
+			return
+		}
+		status = ssr.Status
 	}
 
-	if !(ssr.Status == ShippingsStatusShipping || ssr.Status == ShippingsStatusDone) {
+	if !(status == ShippingsStatusShipping || status == ShippingsStatusDone) {
 		outputErrorMsg(w, http.StatusForbidden, "shipment service側で配送中か配送完了になっていません")
 		tx.Rollback()
 		return
 	}
 
 	_, err = tx.Exec("UPDATE `shippings` SET `status` = ?, `updated_at` = ? WHERE `transaction_evidence_id` = ?",
-		ssr.Status,
+		status,
 		time.Now(),
 		transactionEvidence.ID,
 	)
