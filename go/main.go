@@ -326,6 +326,7 @@ func main() {
 	defer dbx.Close()
 
 	categoryCache = make(map[int]Category)
+	doneTransactionEvidences = make(map[int64]struct{})
 
 	mux := goji.NewMux()
 
