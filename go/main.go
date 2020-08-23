@@ -2301,13 +2301,9 @@ func getSettings(w http.ResponseWriter, r *http.Request) {
 
 	ress.PaymentServiceURL = getPaymentServiceURL()
 
-	categories := []Category{}
-
-	err := dbx.Select(&categories, "SELECT * FROM `categories`")
-	if err != nil {
-		log.Print(err)
-		outputErrorMsg(w, http.StatusInternalServerError, "db error")
-		return
+	categories := make([]Category, 0, len(categoryCache))
+	for _, category := range categoryCache {
+		categories = append(categories, category)
 	}
 	ress.Categories = categories
 
