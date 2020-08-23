@@ -1481,6 +1481,7 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 	buyItem := BuyItem{}
 	err = tx.Get(&buyItem, "SELECT `i`.`seller_id` as i_seller_id, `i`.`id` as i_id, `i`.`status` as i_status, `i`.`name` as i_name, `i`.`price` as i_price, `i`.`description` as i_description, `i`.`category_id` as i_category_id, `u`.`address` as u_address, `u`.`account_name` as u_account_name FROM `items` as `i` JOIN `users` as `u` ON `i`.`seller_id` = `u`.`id` WHERE `i`.`id` = ? FOR UPDATE", rb.ItemID)
 	if err == sql.ErrNoRows {
+		log.Println("404 1")
 		outputErrorMsg(w, http.StatusNotFound, "item or item seller not found")
 		tx.Rollback()
 		return
@@ -1494,12 +1495,14 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if buyItem.Status != ItemStatusOnSale {
+		log.Println("403 2")
 		outputErrorMsg(w, http.StatusForbidden, "item is not for sale")
 		tx.Rollback()
 		return
 	}
 
 	if buyItem.SellerID == buyer.ID {
+		log.Println("403 3")
 		outputErrorMsg(w, http.StatusForbidden, "自分の商品は買えません")
 		tx.Rollback()
 		return
@@ -1515,6 +1518,7 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if rb.Token == "" {
+		log.Println("403 4")
 		outputErrorMsg(w, http.StatusBadRequest, "カード情報に誤りがあります")
 		tx.Rollback()
 		return
@@ -1628,18 +1632,21 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if pstr.Status == "invalid" {
+		log.Println("403 10")
 		outputErrorMsg(w, http.StatusBadRequest, "カード情報に誤りがあります")
 		tx.Rollback()
 		return
 	}
 
 	if pstr.Status == "fail" {
+		log.Println("403 11")
 		outputErrorMsg(w, http.StatusBadRequest, "カードの残高が足りません")
 		tx.Rollback()
 		return
 	}
 
 	if pstr.Status != "ok" {
+		log.Println("403 12")
 		outputErrorMsg(w, http.StatusBadRequest, "想定外のエラー")
 		tx.Rollback()
 		return
