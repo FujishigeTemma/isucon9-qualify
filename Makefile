@@ -13,6 +13,9 @@ DB_PORT=3306
 DB_USER=isucari
 DB_NAME=isucari
 DB_PASS=isucari
+export DSTAT_MYSQL_USER=$(DB_USER)
+export DSTAT_MYSQL_PWD=$(DB_PASS)
+export DSTAT_MYSQL_HOST=$(DB_HOST)
 
 MYSQL_CMD:=mysql -h$(DB_HOST) -P$(DB_PORT) -u$(DB_USER) -p$(DB_PASS) $(DB_NAME)
 
@@ -115,6 +118,10 @@ else
 	@git tag $(TAG)
 	@git push origin $(TAG)
 endif
+
+.PHONY: dbstat
+dbstat:
+	dstat -T --mysql5-cmds --mysql5-io --mysql5-keys
 
 .PHONY: analytics
 analytics: kataru dumpslow digestslow pprof
