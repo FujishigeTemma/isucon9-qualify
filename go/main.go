@@ -1468,6 +1468,11 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if rb.Token == "" {
+		outputErrorMsg(w, http.StatusBadRequest, "カード情報に誤りがあります")
+		return
+	}
+
 	buyer, errCode, errMsg := getUser(r)
 	if errMsg != "" {
 		outputErrorMsg(w, errCode, errMsg)
