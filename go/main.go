@@ -3,7 +3,6 @@ package main
 import (
 	crand "crypto/rand"
 	"database/sql"
-	jsoniter "github.com/json-iterator/go"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -15,6 +14,8 @@ import (
 	"strconv"
 	"sync"
 	"time"
+
+	jsoniter "github.com/json-iterator/go"
 
 	_ "net/http/pprof"
 
@@ -1430,6 +1431,18 @@ func getQRCode(w http.ResponseWriter, r *http.Request) {
 	w.Write(shipping.ImgBinary)
 }
 
+type BuyItem struct {
+	SellerID        int64  `db:"i.seller_id"`
+	ItemID          int64  `db:"i.item_id"`
+	Status          string `db:"i.status"`
+	ItemName        string `db:"i.item_name"`
+	ItemPrice       int    `db:"i.item_price"`
+	ItemDescription string `db:"i.item_description"`
+	CategoryID      int    `db:"i.category_id"`
+	SellerAddress   string `db:"u.address"`
+	SellerName      string `db:"u.account_name"`
+}
+
 func postBuy(w http.ResponseWriter, r *http.Request) {
 	rb := reqBuy{}
 
@@ -1453,10 +1466,10 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 
 	tx := dbx.MustBegin()
 
-	targetItem := Item{}
-	err = tx.Get(&targetItem, "SELECT * FROM `items` WHERE `id` = ? FOR UPDATE", rb.ItemID)
+	buyItem := BuyItem{}
+	err = tx.Get(&buyItem, "SELECT *  FROM `items` as `i` JOIN `users` as `u` ON `items`.`seller_id` == `users`.`id` WHERE `id` = ? FOR UPDATE", rb.ItemID)
 	if err == sql.ErrNoRows {
-		outputErrorMsg(w, http.StatusNotFound, "item not found")
+		outputErrorMsg(w, http.StatusNotFound, "item or item seller not found")
 		tx.Rollback()
 		return
 	}
@@ -1468,34 +1481,19 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if targetItem.Status != ItemStatusOnSale {
+	if buyItem.Status != ItemStatusOnSale {
 		outputErrorMsg(w, http.StatusForbidden, "item is not for sale")
 		tx.Rollback()
 		return
 	}
 
-	if targetItem.SellerID == buyer.ID {
+	if buyItem.SellerID == buyer.ID {
 		outputErrorMsg(w, http.StatusForbidden, "自分の商品は買えません")
 		tx.Rollback()
 		return
 	}
 
-	seller := User{}
-	err = tx.Get(&seller, "SELECT * FROM `users` WHERE `id` = ? FOR UPDATE", targetItem.SellerID)
-	if err == sql.ErrNoRows {
-		outputErrorMsg(w, http.StatusNotFound, "seller not found")
-		tx.Rollback()
-		return
-	}
-	if err != nil {
-		log.Print(err)
-
-		outputErrorMsg(w, http.StatusInternalServerError, "db error")
-		tx.Rollback()
-		return
-	}
-
-	category, err := getCategoryByID(targetItem.CategoryID)
+	category, err := getCategoryByID(buyItem.CategoryID)
 	if err != nil {
 		log.Print(err)
 
@@ -1505,13 +1503,13 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 	}
 
 	result, err := tx.Exec("INSERT INTO `transaction_evidences` (`seller_id`, `buyer_id`, `status`, `item_id`, `item_name`, `item_price`, `item_description`,`item_category_id`,`item_root_category_id`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-		targetItem.SellerID,
+		buyItem.SellerID,
 		buyer.ID,
 		TransactionEvidenceStatusWaitShipping,
-		targetItem.ID,
-		targetItem.Name,
-		targetItem.Price,
-		targetItem.Description,
+		buyItem.ItemID,
+		buyItem.ItemName,
+		buyItem.ItemPrice,
+		buyItem.ItemDescription,
 		category.ID,
 		category.ParentID,
 	)
@@ -1536,7 +1534,7 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 		buyer.ID,
 		ItemStatusTrading,
 		time.Now(),
-		targetItem.ID,
+		buyItem.ItemID,
 	)
 	if err != nil {
 		log.Print(err)
@@ -1564,8 +1562,8 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 		scr, err := APIShipmentCreate(getShipmentServiceURL(), &APIShipmentCreateReq{
 			ToAddress:   buyer.Address,
 			ToName:      buyer.AccountName,
-			FromAddress: seller.Address,
-			FromName:    seller.AccountName,
+			FromAddress: buyItem.SellerAddress,
+			FromName:    buyItem.SellerName,
 		})
 		str := ScrStruct{
 			scr: scr,
@@ -1578,7 +1576,7 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 			ShopID: PaymentServiceIsucariShopID,
 			Token:  rb.Token,
 			APIKey: PaymentServiceIsucariAPIKey,
-			Price:  targetItem.Price,
+			Price:  buyItem.ItemPrice,
 		})
 		str := PstrStruct{
 			pstr: pstr,
@@ -1632,14 +1630,14 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 	_, err = tx.Exec("INSERT INTO `shippings` (`transaction_evidence_id`, `status`, `item_name`, `item_id`, `reserve_id`, `reserve_time`, `to_address`, `to_name`, `from_address`, `from_name`, `img_binary`) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
 		transactionEvidenceID,
 		ShippingsStatusInitial,
-		targetItem.Name,
-		targetItem.ID,
+		buyItem.ItemName,
+		buyItem.ItemID,
 		scr.ReserveID,
 		scr.ReserveTime,
 		buyer.Address,
 		buyer.AccountName,
-		seller.Address,
-		seller.AccountName,
+		buyItem.SellerAddress,
+		buyItem.SellerName,
 		"",
 	)
 	if err != nil {
