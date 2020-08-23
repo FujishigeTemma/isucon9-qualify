@@ -1027,7 +1027,7 @@ func getTransactionAdditions(tx *sqlx.Tx, w http.ResponseWriter, itemIDs []int64
 }
 
 func getTransactions(w http.ResponseWriter, r *http.Request) {
-	user, errCode, errMsg := getUser(r)
+	userId, errCode, errMsg := getUserID(r)
 	if errMsg != "" {
 		outputErrorMsg(w, errCode, errMsg)
 		return
@@ -1061,8 +1061,8 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 		// paging
 		err := tx.Select(&items,
 			"SELECT * FROM `items` WHERE (`seller_id` = ? OR `buyer_id` = ?) AND `status` IN (?,?,?,?,?) AND (`created_at` < ?  OR (`created_at` <= ? AND `id` < ?)) ORDER BY `created_at` DESC, `id` DESC LIMIT ?",
-			user.ID,
-			user.ID,
+			userId,
+			userId,
 			ItemStatusOnSale,
 			ItemStatusTrading,
 			ItemStatusSoldOut,
@@ -1083,8 +1083,8 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 		// 1st page
 		err := tx.Select(&items,
 			"SELECT * FROM `items` WHERE (`seller_id` = ? OR `buyer_id` = ?) AND `status` IN (?,?,?,?,?) ORDER BY `created_at` DESC, `id` DESC LIMIT ?",
-			user.ID,
-			user.ID,
+			userId,
+			userId,
 			ItemStatusOnSale,
 			ItemStatusTrading,
 			ItemStatusSoldOut,
