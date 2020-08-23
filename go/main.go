@@ -1467,7 +1467,7 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 	tx := dbx.MustBegin()
 
 	buyItem := BuyItem{}
-	err = tx.Get(&buyItem, "SELECT *  FROM `items` as `i` JOIN `users` as `u` ON `items`.`seller_id` == `users`.`id` WHERE `id` = ? FOR UPDATE", rb.ItemID)
+	err = tx.Get(&buyItem, "SELECT *  FROM `items` as `i` JOIN `users` as `u` ON `i`.`seller_id` = `u`.`id` WHERE `i`.`id` = ? FOR UPDATE", rb.ItemID)
 	if err == sql.ErrNoRows {
 		outputErrorMsg(w, http.StatusNotFound, "item or item seller not found")
 		tx.Rollback()
