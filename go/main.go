@@ -1476,6 +1476,31 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	type IItem struct {
+		Status string `db:"status"`
+		SellerID int64 `db:"seller_id"`
+	}
+	iItem := IItem{}
+	err = dbx.Get(&iItem, "SELECT seller_id, status FROM `items` WHERE `id` = ?", rb.ItemID)
+	if err == sql.ErrNoRows {
+		outputErrorMsg(w, http.StatusNotFound, "item not found")
+		return
+	}
+	if err != nil {
+		log.Print(err)
+		outputErrorMsg(w, http.StatusInternalServerError, "db error")
+		return
+	}
+
+	if iItem.Status != ItemStatusOnSale {
+		outputErrorMsg(w, http.StatusForbidden, "item is not for sale")
+		return
+	}
+	if iItem.SellerID == buyer.ID {
+		outputErrorMsg(w, http.StatusForbidden, "自分の商品は買えません")
+		return
+	}
+
 	tx := dbx.MustBegin()
 
 	buyItem := BuyItem{}
