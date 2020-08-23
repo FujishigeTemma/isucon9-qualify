@@ -980,7 +980,7 @@ func getShippingStatuses(tx *sqlx.Tx, w http.ResponseWriter, transactionEvidence
 	wg := sync.WaitGroup{}
 
 	for _, s := range shippings {
-		if s.Status == ShippingsStatusShipping {
+		if s.Status == "shipping" {
 			wg.Add(1)
 			go requestShippingStatus(s.TransactionEvidenceID, s.ReserveID, &resMap, &wg)
 		}
@@ -990,7 +990,7 @@ func getShippingStatuses(tx *sqlx.Tx, w http.ResponseWriter, transactionEvidence
 
 	ssMap = make(map[int64]string)
 	for _, s := range shippings {
-		if s.Status == ShippingsStatusShipping {
+		if s.Status == "shipping" {
 			val, _ := resMap.Load(s.TransactionEvidenceID)
 			if val.err != nil {
 				log.Print(val.err)
@@ -1291,18 +1291,6 @@ func getItem(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
-			if shipping.Status == ShippingsStatusShipping {
-				ssr, err := APIShipmentStatus(getShipmentServiceURL(), &APIShipmentStatusReq{
-					ReserveID: shipping.ReserveID,
-				})
-				if err != nil {
-					log.Print(err)
-					outputErrorMsg(w, http.StatusInternalServerError, "failed to request to shipment service")
-					return
-				}
-				shipping.Status = ssr.Status
-			}
-
 			itemDetail.TransactionEvidenceID = transactionEvidence.ID
 			itemDetail.TransactionEvidenceStatus = transactionEvidence.Status
 			itemDetail.ShippingStatus = shipping.Status
@@ -1448,18 +1436,6 @@ func getQRCode(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		outputErrorMsg(w, http.StatusInternalServerError, "db error")
 		return
-	}
-
-	if shipping.Status == ShippingsStatusShipping {
-		ssr, err := APIShipmentStatus(getShipmentServiceURL(), &APIShipmentStatusReq{
-			ReserveID: shipping.ReserveID,
-		})
-		if err != nil {
-			log.Print(err)
-			outputErrorMsg(w, http.StatusInternalServerError, "failed to request to shipment service")
-			return
-		}
-		shipping.Status = ssr.Status
 	}
 
 	if shipping.Status != ShippingsStatusWaitPickup && shipping.Status != ShippingsStatusShipping {
@@ -1871,8 +1847,25 @@ func postShipDone(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	ssr, err := APIShipmentStatus(getShipmentServiceURL(), &APIShipmentStatusReq{
+		ReserveID: shipping.ReserveID,
+	})
+	if err != nil {
+		log.Print(err)
+		outputErrorMsg(w, http.StatusInternalServerError, "failed to request to shipment service")
+		tx.Rollback()
+
+		return
+	}
+
+	if !(ssr.Status == ShippingsStatusShipping || ssr.Status == ShippingsStatusDone) {
+		outputErrorMsg(w, http.StatusForbidden, "shipment service側で配送中か配送完了になっていません")
+		tx.Rollback()
+		return
+	}
+
 	_, err = tx.Exec("UPDATE `shippings` SET `status` = ?, `updated_at` = ? WHERE `transaction_evidence_id` = ?",
-		ShippingsStatusShipping,
+		ssr.Status,
 		time.Now(),
 		transactionEvidence.ID,
 	)
