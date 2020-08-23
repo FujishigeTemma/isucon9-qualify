@@ -910,6 +910,16 @@ func requestShippingStatus(transactionEvidenceID int64, reserveID string, m *API
 	ssr, err := APIShipmentStatus(getShipmentServiceURL(), &APIShipmentStatusReq{
 		ReserveID: reserveID,
 	})
+	if err != nil {
+		for i := 0; i < 3; i++ {
+			ssr, err = APIShipmentStatus(getShipmentServiceURL(), &APIShipmentStatusReq{
+				ReserveID: reserveID,
+			})
+			if err == nil {
+				break
+			}
+		}
+	}
 	m.Store(transactionEvidenceID, APIShippingStatus{
 		Status: ssr.Status,
 		err:    err,
