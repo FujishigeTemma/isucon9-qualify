@@ -1847,6 +1847,12 @@ func postShipDone(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if shipping.Status != ShippingsStatusWaitPickup {
+		outputErrorMsg(w, http.StatusForbidden, "集荷予約されてません")
+		tx.Rollback()
+		return
+	}
+
 	ssr, err := APIShipmentStatus(getShipmentServiceURL(), &APIShipmentStatusReq{
 		ReserveID: shipping.ReserveID,
 	})
