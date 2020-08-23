@@ -957,6 +957,7 @@ func getShippingStatuses(tx *sqlx.Tx, w http.ResponseWriter, transactionEvidence
 	}
 
 	resMap := NewAPIShippingStatusMap()
+	ssMap = make(map[int64]string)
 	wg := sync.WaitGroup{}
 
 	for _, s := range shippings {
@@ -971,7 +972,6 @@ func getShippingStatuses(tx *sqlx.Tx, w http.ResponseWriter, transactionEvidence
 
 	wg.Wait()
 
-	ssMap = make(map[int64]string)
 	for _, s := range shippings {
 		_, exists := ssMap[s.TransactionEvidenceID]
 		if !exists {
