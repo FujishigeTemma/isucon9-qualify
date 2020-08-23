@@ -1870,6 +1870,11 @@ func postShipDone(w http.ResponseWriter, r *http.Request) {
 		tx.Rollback()
 		return
 	}
+	if shipping.Status != ShippingsStatusWaitPickup {
+		outputErrorMsg(w, http.StatusForbidden, "shipment service側で集荷待ちになっていません")
+		tx.Rollback()
+		return
+	}
 
 	_, err = tx.Exec("UPDATE `shippings` SET `status` = ?, `updated_at` = ? WHERE `transaction_evidence_id` = ?",
 		ShippingsStatusShipping,
