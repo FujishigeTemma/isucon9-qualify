@@ -14,7 +14,8 @@ CREATE TABLE `users` (
   `address` varchar(191) NOT NULL,
   `num_sell_items` int unsigned NOT NULL DEFAULT 0,
   `last_bump` datetime NOT NULL DEFAULT '2000-01-01 00:00:00',
-  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_account_name (`account_name`)
 ) ENGINE=InnoDB DEFAULT CHARACTER SET utf8mb4;
 
 DROP TABLE IF EXISTS `items`;
