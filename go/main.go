@@ -326,10 +326,6 @@ func main() {
 	}
 	defer dbx.Close()
 
-	categoryCache = make(map[int]Category)
-	doneTransactionEvidences = make(map[int64]struct{})
-	buyingMutexMap = NewBuyingMutexMap()
-
 	http.DefaultTransport.(*http.Transport).MaxIdleConnsPerHost = 0
 
 	mux := goji.NewMux()
@@ -464,6 +460,11 @@ func postInitialize(w http.ResponseWriter, r *http.Request) {
 		outputErrorMsg(w, http.StatusInternalServerError, "exec init.sh error")
 		return
 	}
+
+	// キャッシュのリセット
+	categoryCache = make(map[int]Category)
+	doneTransactionEvidences = make(map[int64]struct{})
+	buyingMutexMap = NewBuyingMutexMap()
 
 	// configのメモリキャッシュ
 	if ri.PaymentServiceURL != "" {
