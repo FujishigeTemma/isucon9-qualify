@@ -1509,7 +1509,10 @@ func (s *BuyingMutexMap) SetInvalid(key int64) {
 }
 func (s *BuyingMutexMap) Load(key int64) (*BuyingMutex, bool) {
 	val, exists := s.s.Load(key)
-	return val.(*BuyingMutex), exists
+	if exists {
+		return val.(*BuyingMutex), exists
+	}
+	return nil, exists
 }
 func (s *BuyingMutexMap) Delete(key int64) {
 	s.s.Delete(key)
