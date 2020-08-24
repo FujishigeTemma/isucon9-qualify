@@ -1543,10 +1543,10 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if mutex, isRunning := buyingMutexMap.Load(itemID); isRunning {
+		mutex.Cond.L.Lock()
+		defer mutex.Cond.L.Unlock()
 		if mutex.Result == nil {
 			log.Printf("%v: wait\n", itemID)
-			mutex.Cond.L.Lock()
-			defer mutex.Cond.L.Unlock()
 			mutex.Cond.Wait()
 			log.Printf("%v: waitdone\n", itemID)
 		}
