@@ -1497,7 +1497,6 @@ func (s *BuyingMutexMap) SetSuccess(key int64) {
 
 	val, _ := s.Load(key)
 	val.Cond.Broadcast()
-	log.Printf("%v: broadcast success\n", key)
 }
 func (s *BuyingMutexMap) SetFailure(key int64) {
 	s.SetResult(key, nil)
@@ -1508,7 +1507,6 @@ func (s *BuyingMutexMap) SetFailure(key int64) {
 
 	val.Cond.Signal()
 	val.SentSignal = true
-	log.Printf("%v: signal failure\n", key)
 }
 func (s *BuyingMutexMap) ReceivedFailure(key int64) {
 	val, _ := s.Load(key)
@@ -1516,7 +1514,6 @@ func (s *BuyingMutexMap) ReceivedFailure(key int64) {
 	defer val.Unlock()
 
 	val.SentSignal = false
-	log.Printf("%v: received failure\n", key)
 }
 func (s *BuyingMutexMap) SetInvalid(key int64) {
 	res := false
@@ -1524,7 +1521,6 @@ func (s *BuyingMutexMap) SetInvalid(key int64) {
 
 	val, _ := s.Load(key)
 	val.Cond.Broadcast()
-	log.Printf("%v: broadcast invalid\n", key)
 }
 func (s *BuyingMutexMap) Load(key int64) (*BuyingMutex, bool) {
 	val, exists := s.s.Load(key)
@@ -1563,9 +1559,7 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 			if !mutex.SentSignal {
 				mutex.Cond.L.Lock()
 				defer mutex.Cond.L.Unlock()
-				log.Printf("%v: wait\n", itemID)
 				mutex.Cond.Wait()
-				log.Printf("%v: waitdone\n", itemID)
 			}
 			buyingMutexMap.ReceivedFailure(itemID)
 		}
@@ -1581,7 +1575,6 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 		l := new(sync.Mutex)
 		c := sync.NewCond(l)
 		buyingMutexMap.Add(itemID, c)
-		log.Printf("%v: start\n", itemID)
 	}
 
 	tx := dbx.MustBegin()
