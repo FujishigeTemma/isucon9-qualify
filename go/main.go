@@ -1520,13 +1520,13 @@ func (s *BuyingMutexMap) Delete(key int64) {
 
 func postBuy(w http.ResponseWriter, r *http.Request) {
 	rb := reqBuy{}
-	itemID := rb.ItemID
 
 	err := json.NewDecoder(r.Body).Decode(&rb)
 	if err != nil {
 		outputErrorMsg(w, http.StatusBadRequest, "json decode error")
 		return
 	}
+	itemID := rb.ItemID
 
 	if rb.CSRFToken != getCSRFToken(r) {
 		outputErrorMsg(w, http.StatusUnprocessableEntity, "csrf token error")
