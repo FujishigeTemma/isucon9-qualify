@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"sync"
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -15,9 +16,24 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+type CacheMap struct {
+	s sync.Map
+}
+
+func (s *CacheMap) Store(key string, value string) {
+	s.s.Store(key, value)
+}
+func (s *CacheMap) Load(key string) (string, bool) {
+	v, ok := s.s.Load(key)
+	if ok {
+		return v.(string), true
+	}
+	return "", false
+}
+
 var (
 	dbx   *sqlx.DB
-	cache map[string]string
+	cache CacheMap
 )
 
 func main() {
@@ -37,7 +53,7 @@ func main() {
 	dbx = _dbx
 	defer dbx.Close()
 
-	cache = make(map[string]string)
+	cache = CacheMap{}
 
 	// go pollDB(dbx)
 
@@ -90,7 +106,7 @@ func auth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if cachedPass, ok := cache[accountName]; ok {
+	if cachedPass, ok := cache.Load(accountName); ok {
 		isSame := subtle.ConstantTimeCompare([]byte(cachedPass), []byte(password)) == 1
 		if !isSame {
 			outputErrorMsg(w, http.StatusUnauthorized, "アカウント名かパスワードが間違えています")
@@ -109,7 +125,7 @@ func auth(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		cache[accountName] = password
+		cache.Store(accountName, password)
 	}
 
 	w.Header().Set("Content-Type", "application/json;charset=utf-8")
