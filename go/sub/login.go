@@ -2,18 +2,23 @@
 package sub
 
 import (
+	"crypto/subtle"
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	_ "github.com/go-sql-driver/mysql"
-	"github.com/jmoiron/sqlx"
-	"golang.org/x/crypto/bcrypt"
 	"log"
 	"net/http"
 	"time"
+
+	_ "github.com/go-sql-driver/mysql"
+	"github.com/jmoiron/sqlx"
+	"golang.org/x/crypto/bcrypt"
 )
 
-var dbx *sqlx.DB
+var (
+	dbx   *sqlx.DB
+	cache map[string]string
+)
 
 func main() {
 	dsn := fmt.Sprintf(
@@ -32,7 +37,9 @@ func main() {
 	dbx = _dbx
 	defer dbx.Close()
 
-	// go pollDB()
+	cache = make(map[string]string)
+
+	// go pollDB(dbx)
 
 	http.HandleFunc("/auth", auth)
 	http.ListenAndServe(":8080", nil)
@@ -83,17 +90,28 @@ func auth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = bcrypt.CompareHashAndPassword(u.HashedPassword, []byte(password))
-	if err == bcrypt.ErrMismatchedHashAndPassword {
-		outputErrorMsg(w, http.StatusUnauthorized, "アカウント名かパスワードが間違えています")
-		return
-	}
-	if err != nil {
-		log.Print(err)
+	if cachedPass, ok := cache[accountName]; ok {
+		isSame := subtle.ConstantTimeCompare([]byte(cachedPass), []byte(password)) == 1
+		if !isSame {
+			outputErrorMsg(w, http.StatusUnauthorized, "アカウント名かパスワードが間違えています")
+			return
+		}
+	} else {
+		err = bcrypt.CompareHashAndPassword(u.HashedPassword, []byte(password))
+		if err == bcrypt.ErrMismatchedHashAndPassword {
+			outputErrorMsg(w, http.StatusUnauthorized, "アカウント名かパスワードが間違えています")
+			return
+		}
+		if err != nil {
+			log.Print(err)
 
-		outputErrorMsg(w, http.StatusInternalServerError, "crypt error")
-		return
+			outputErrorMsg(w, http.StatusInternalServerError, "crypt error")
+			return
+		}
+
+		cache[accountName] = password
 	}
+
 	w.Header().Set("Content-Type", "application/json;charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(u)
@@ -109,7 +127,7 @@ func outputErrorMsg(w http.ResponseWriter, status int, msg string) {
 	}{Error: msg})
 }
 
-func pollDB() {
+func pollDB(dbx *sqlx.DB) {
 	for {
 		err := dbx.Ping()
 		if err != nil {
