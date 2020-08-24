@@ -1550,7 +1550,6 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 				outputErrorMsg(w, http.StatusForbidden, "item is not for sale")
 				return
 			}
-			log.Printf("Return 404 for %v\n", itemID)
 			outputErrorMsg(w, http.StatusNotFound, "item or item seller not found")
 			return
 		}
@@ -1567,7 +1566,6 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 	if err == sql.ErrNoRows {
 		outputErrorMsg(w, http.StatusNotFound, "item or item seller not found")
 		tx.Rollback()
-		log.Printf("Set 404 for %v\n", itemID)
 		buyingMutexMap.SetInvalid(itemID)
 		return
 	}
