@@ -330,6 +330,8 @@ func main() {
 	doneTransactionEvidences = make(map[int64]struct{})
 	buyingMap = NewBuyingMap()
 
+	http.DefaultTransport.(*http.Transport).MaxIdleConnsPerHost = 0
+
 	mux := goji.NewMux()
 
 	// API
