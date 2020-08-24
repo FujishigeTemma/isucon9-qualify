@@ -1464,6 +1464,8 @@ type BuyingMutex struct {
 	// nilのとき処理中、falseのとき無効なItem、trueのとき売却済み
 	Result *bool
 	Cond   *sync.Cond
+	// すでに次のを呼び出し済み
+	SentSignal bool
 }
 type BuyingMutexMap struct {
 	s sync.Map
@@ -1475,7 +1477,8 @@ func NewBuyingMutexMap() BuyingMutexMap {
 func (s *BuyingMutexMap) Add(key int64, cond *sync.Cond) {
 	s.s.Store(key, &BuyingMutex{
 		Result: nil,
-		Cond: cond,
+		Cond:   cond,
+		SentSignal: false,
 	})
 }
 func (s *BuyingMutexMap) SetResult(key int64, result *bool) {
@@ -1499,8 +1502,20 @@ func (s *BuyingMutexMap) SetFailure(key int64) {
 	s.SetResult(key, nil)
 
 	val, _ := s.Load(key)
+	val.Lock()
+	defer val.Unlock()
+
 	val.Cond.Signal()
+	val.SentSignal = true
 	log.Printf("%v: signal failure\n", key)
+}
+func (s *BuyingMutexMap) ReceivedFailure(key int64) {
+	val, _ := s.Load(key)
+	val.Lock()
+	defer val.Unlock()
+
+	val.SentSignal = false
+	log.Printf("%v: received failure\n", key)
 }
 func (s *BuyingMutexMap) SetInvalid(key int64) {
 	res := false
@@ -1543,12 +1558,15 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if mutex, isRunning := buyingMutexMap.Load(itemID); isRunning {
-		mutex.Cond.L.Lock()
-		defer mutex.Cond.L.Unlock()
 		if mutex.Result == nil {
-			log.Printf("%v: wait\n", itemID)
-			mutex.Cond.Wait()
-			log.Printf("%v: waitdone\n", itemID)
+			if !mutex.SentSignal {
+				mutex.Cond.L.Lock()
+				defer mutex.Cond.L.Unlock()
+				log.Printf("%v: wait\n", itemID)
+				mutex.Cond.Wait()
+				log.Printf("%v: waitdone\n", itemID)
+			}
+			buyingMutexMap.ReceivedFailure(itemID)
 		}
 		if mutex.Result != nil {
 			if *mutex.Result == true {
