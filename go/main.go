@@ -71,7 +71,7 @@ var (
 	store                    sessions.Store
 	categoryCache            map[int]Category
 	doneTransactionEvidences map[int64]struct{}
-	buyingMap BuyingMap
+	buyingMutexMap           BuyingMutexMap
 
 	paymentServiceURL  = DefaultPaymentServiceURL
 	shipmentServiceURL = DefaultShipmentServiceURL
@@ -328,7 +328,7 @@ func main() {
 
 	categoryCache = make(map[int]Category)
 	doneTransactionEvidences = make(map[int64]struct{})
-	buyingMap = NewBuyingMap()
+	buyingMutexMap = NewBuyingMutexMap()
 
 	http.DefaultTransport.(*http.Transport).MaxIdleConnsPerHost = 0
 
@@ -1459,26 +1459,65 @@ type BuyItem struct {
 	SellerName      string `db:"u_account_name"`
 }
 
-type BuyingMap struct {
+type BuyingMutex struct {
+	sync.RWMutex
+	// nilのとき処理中、falseのとき無効なItem、trueのとき売却済み
+	Result *bool
+	Cond   *sync.Cond
+}
+type BuyingMutexMap struct {
 	s sync.Map
 }
 
-func NewBuyingMap() BuyingMap {
-	return BuyingMap{}
+func NewBuyingMutexMap() BuyingMutexMap {
+	return BuyingMutexMap{}
 }
-func (s *BuyingMap) Add(key int64) {
-	s.s.Store(key, struct{}{})
+func (s *BuyingMutexMap) Add(key int64, cond *sync.Cond) {
+	s.s.Store(key, &BuyingMutex{
+		Result: nil,
+		Cond: cond,
+	})
 }
-func (s *BuyingMap) Delete(key int64) {
+func (s *BuyingMutexMap) SetResult(key int64, result *bool) {
+	val, _ := s.s.Load(key)
+	v := val.(*BuyingMutex)
+
+	v.Lock()
+	defer v.Unlock()
+
+	v.Result = result
+}
+func (s *BuyingMutexMap) SetSuccess(key int64) {
+	res := true
+	s.SetResult(key, &res)
+
+	val, _ := s.Load(key)
+	val.Cond.Broadcast()
+}
+func (s *BuyingMutexMap) SetFailure(key int64) {
+	s.SetResult(key, nil)
+
+	val, _ := s.Load(key)
+	val.Cond.Signal()
+}
+func (s *BuyingMutexMap) SetInvalid(key int64) {
+	res := false
+	s.SetResult(key, &res)
+
+	val, _ := s.Load(key)
+	val.Cond.Broadcast()
+}
+func (s *BuyingMutexMap) Load(key int64) (*BuyingMutex, bool) {
+	val, exists := s.s.Load(key)
+	return val.(*BuyingMutex), exists
+}
+func (s *BuyingMutexMap) Delete(key int64) {
 	s.s.Delete(key)
-}
-func (s *BuyingMap) Has(key int64) bool {
-	_, ok := s.s.Load(key)
-	return ok
 }
 
 func postBuy(w http.ResponseWriter, r *http.Request) {
 	rb := reqBuy{}
+	itemID := rb.ItemID
 
 	err := json.NewDecoder(r.Body).Decode(&rb)
 	if err != nil {
@@ -1488,7 +1527,6 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 
 	if rb.CSRFToken != getCSRFToken(r) {
 		outputErrorMsg(w, http.StatusUnprocessableEntity, "csrf token error")
-
 		return
 	}
 
@@ -1498,21 +1536,34 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if (buyingMap.Has(rb.ItemID)) {
-		outputErrorMsg(w, http.StatusTooManyRequests, "now pending")
-		return
+	if mutex, isRunning := buyingMutexMap.Load(itemID); isRunning {
+		if mutex.Result == nil {
+			mutex.Cond.L.Lock()
+			defer mutex.Cond.L.Unlock()
+			mutex.Cond.Wait()
+		}
+		if mutex.Result != nil {
+			if *mutex.Result == true {
+				outputErrorMsg(w, http.StatusForbidden, "item is not for sale")
+				return
+			}
+			outputErrorMsg(w, http.StatusNotFound, "item or item seller not found")
+			return
+		}
+	} else {
+		l := new(sync.Mutex)
+		c := sync.NewCond(l)
+		buyingMutexMap.Add(itemID, c)
 	}
-
-	buyingMap.Add(rb.ItemID)
-	defer buyingMap.Delete(rb.ItemID)
 
 	tx := dbx.MustBegin()
 
 	buyItem := BuyItem{}
-	err = tx.Get(&buyItem, "SELECT `i`.`seller_id` as i_seller_id, `i`.`id` as i_id, `i`.`status` as i_status, `i`.`name` as i_name, `i`.`price` as i_price, `i`.`description` as i_description, `i`.`category_id` as i_category_id, `u`.`address` as u_address, `u`.`account_name` as u_account_name FROM `items` as `i` JOIN `users` as `u` ON `i`.`seller_id` = `u`.`id` WHERE `i`.`id` = ? FOR UPDATE", rb.ItemID)
+	err = tx.Get(&buyItem, "SELECT `i`.`seller_id` as i_seller_id, `i`.`id` as i_id, `i`.`status` as i_status, `i`.`name` as i_name, `i`.`price` as i_price, `i`.`description` as i_description, `i`.`category_id` as i_category_id, `u`.`address` as u_address, `u`.`account_name` as u_account_name FROM `items` as `i` JOIN `users` as `u` ON `i`.`seller_id` = `u`.`id` WHERE `i`.`id` = ? FOR UPDATE", itemID)
 	if err == sql.ErrNoRows {
 		outputErrorMsg(w, http.StatusNotFound, "item or item seller not found")
 		tx.Rollback()
+		buyingMutexMap.SetInvalid(itemID)
 		return
 	}
 	if err != nil {
@@ -1520,18 +1571,21 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 
 		outputErrorMsg(w, http.StatusInternalServerError, "db error")
 		tx.Rollback()
+		buyingMutexMap.SetFailure(itemID)
 		return
 	}
 
 	if buyItem.Status != ItemStatusOnSale {
 		outputErrorMsg(w, http.StatusForbidden, "item is not for sale")
 		tx.Rollback()
+		buyingMutexMap.SetSuccess(itemID)
 		return
 	}
 
 	if buyItem.SellerID == buyer.ID {
 		outputErrorMsg(w, http.StatusForbidden, "自分の商品は買えません")
 		tx.Rollback()
+		buyingMutexMap.SetFailure(itemID)
 		return
 	}
 
@@ -1541,12 +1595,14 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 
 		outputErrorMsg(w, http.StatusInternalServerError, "category id error")
 		tx.Rollback()
+		buyingMutexMap.SetFailure(itemID)
 		return
 	}
 
 	if rb.Token == "" {
 		outputErrorMsg(w, http.StatusBadRequest, "カード情報に誤りがあります")
 		tx.Rollback()
+		buyingMutexMap.SetFailure(itemID)
 		return
 	}
 
@@ -1566,6 +1622,7 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 
 		outputErrorMsg(w, http.StatusInternalServerError, "db error")
 		tx.Rollback()
+		buyingMutexMap.SetFailure(itemID)
 		return
 	}
 
@@ -1575,6 +1632,7 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 
 		outputErrorMsg(w, http.StatusInternalServerError, "db error")
 		tx.Rollback()
+		buyingMutexMap.SetFailure(itemID)
 		return
 	}
 
@@ -1589,6 +1647,7 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 
 		outputErrorMsg(w, http.StatusInternalServerError, "db error")
 		tx.Rollback()
+		buyingMutexMap.SetFailure(itemID)
 		return
 	}
 
@@ -1642,6 +1701,7 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 				log.Print(err)
 				outputErrorMsg(w, http.StatusInternalServerError, "failed to request to shipment service")
 				tx.Rollback()
+				buyingMutexMap.SetFailure(itemID)
 				return
 			}
 		case str := <-pstrChan:
@@ -1652,6 +1712,7 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 
 				outputErrorMsg(w, http.StatusInternalServerError, "payment service is failed")
 				tx.Rollback()
+				buyingMutexMap.SetFailure(itemID)
 				return
 			}
 		}
@@ -1660,18 +1721,21 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 	if pstr.Status == "invalid" {
 		outputErrorMsg(w, http.StatusBadRequest, "カード情報に誤りがあります")
 		tx.Rollback()
+		buyingMutexMap.SetFailure(itemID)
 		return
 	}
 
 	if pstr.Status == "fail" {
 		outputErrorMsg(w, http.StatusBadRequest, "カードの残高が足りません")
 		tx.Rollback()
+		buyingMutexMap.SetFailure(itemID)
 		return
 	}
 
 	if pstr.Status != "ok" {
 		outputErrorMsg(w, http.StatusBadRequest, "想定外のエラー")
 		tx.Rollback()
+		buyingMutexMap.SetFailure(itemID)
 		return
 	}
 
@@ -1693,10 +1757,12 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 
 		outputErrorMsg(w, http.StatusInternalServerError, "db error")
 		tx.Rollback()
+		buyingMutexMap.SetFailure(itemID)
 		return
 	}
 
 	tx.Commit()
+	buyingMutexMap.SetSuccess(itemID)
 
 	w.Header().Set("Content-Type", "application/json;charset=utf-8")
 	json.NewEncoder(w).Encode(resBuy{TransactionEvidenceID: transactionEvidenceID})
