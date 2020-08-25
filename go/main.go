@@ -72,7 +72,6 @@ var (
 	categoryCache            map[int]Category
 	doneTransactionEvidences map[int64]struct{}
 	buyingMutexMap           BuyingMutexMap
-	userCategories           map[int64]map[int]struct{}
 
 	paymentServiceURL  = DefaultPaymentServiceURL
 	shipmentServiceURL = DefaultShipmentServiceURL
@@ -488,33 +487,6 @@ func postInitialize(w http.ResponseWriter, r *http.Request) {
 		categoryCache[c.ID] = c
 	}
 
-	// ユーザーの購入したカテゴリ
-	userCategories = make(map[int64]map[int]struct{})
-	users := []struct {
-		ID int64 `db:"id"`
-	}{}
-	err = dbx.Select(&users, "SELECT id FROM `users`")
-	if err != nil {
-		log.Print(err)
-		outputErrorMsg(w, http.StatusInternalServerError, "users init error")
-		return
-	}
-	for _, user := range users {
-		userCategories[user.ID] = make(map[int]struct{})
-	}
-	items := []Item{}
-	err = dbx.Select(&items, "SELECT * FROM `items`")
-	if err != nil {
-		log.Print(err)
-		outputErrorMsg(w, http.StatusInternalServerError, "users items init error")
-		return
-	}
-	for _, item := range items {
-		if item.BuyerID != 0 {
-			userCategories[item.BuyerID][item.CategoryID] = struct{}{}
-		}
-	}
-
 	campaign, err := strconv.Atoi(os.Getenv("CAMPAIGN"))
 	if err != nil {
 		campaign = 0
@@ -553,70 +525,34 @@ func getNewItems(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	userID, errCode, errMsg := getUserID(r)
-	if errMsg != "" {
-		outputErrorMsg(w, errCode, errMsg)
-		return
-	}
-	categories := make([]int, 0)
-	for cID := range userCategories[userID] {
-		categories = append(categories, cID)
-	}
-
-	var inQuery string
-	var inArgs []interface{}
+	items := []Item{}
 	if itemID > 0 && createdAt > 0 {
 		// paging
-		if len(categories) > 0 {
-			inQuery, inArgs, err = sqlx.In(
-				"SELECT * FROM `items` WHERE `status` = ? AND category_id IN (?) AND (`created_at` < ?  OR (`created_at` <= ? AND `id` < ?)) ORDER BY `created_at` DESC, `id` DESC LIMIT ?",
-				ItemStatusOnSale,
-				categories,
-				time.Unix(createdAt, 0),
-				time.Unix(createdAt, 0),
-				itemID,
-				ItemsPerPage+1,
-			)
-		} else {
-			inQuery, inArgs, err = sqlx.In(
-				"SELECT * FROM `items` WHERE `status` = ? AND (`created_at` < ?  OR (`created_at` <= ? AND `id` < ?)) ORDER BY `created_at` DESC, `id` DESC LIMIT ?",
-				ItemStatusOnSale,
-				time.Unix(createdAt, 0),
-				time.Unix(createdAt, 0),
-				itemID,
-				ItemsPerPage+1,
-			)
+		err := dbx.Select(&items,
+			"SELECT * FROM `items` WHERE `status` = ? AND (`created_at` < ?  OR (`created_at` <= ? AND `id` < ?)) ORDER BY `created_at` DESC, `id` DESC LIMIT ?",
+			ItemStatusOnSale,
+			time.Unix(createdAt, 0),
+			time.Unix(createdAt, 0),
+			itemID,
+			ItemsPerPage+1,
+		)
+		if err != nil {
+			log.Print(err)
+			outputErrorMsg(w, http.StatusInternalServerError, "db error")
+			return
 		}
 	} else {
 		// 1st page
-		if len(categories) > 0 {
-			inQuery, inArgs, err = sqlx.In(
-				"SELECT * FROM `items` WHERE `status` = ? AND category_id IN (?) ORDER BY `created_at` DESC, `id` DESC LIMIT ?",
-				ItemStatusOnSale,
-				categories,
-				ItemsPerPage+1,
-			)
-		} else {
-			inQuery, inArgs, err = sqlx.In(
-				"SELECT * FROM `items` WHERE `status` = ? ORDER BY `created_at` DESC, `id` DESC LIMIT ?",
-				ItemStatusOnSale,
-				ItemsPerPage+1,
-			)
+		err := dbx.Select(&items,
+			"SELECT * FROM `items` WHERE `status` = ? ORDER BY `created_at` DESC, `id` DESC LIMIT ?",
+			ItemStatusOnSale,
+			ItemsPerPage+1,
+		)
+		if err != nil {
+			log.Print(err)
+			outputErrorMsg(w, http.StatusInternalServerError, "db error")
+			return
 		}
-	}
-	if err != nil {
-		log.Print(err)
-		outputErrorMsg(w, http.StatusInternalServerError, "db error")
-		return
-	}
-
-	items := []Item{}
-	err = dbx.Select(&items, inQuery, inArgs...)
-
-	if err != nil {
-		log.Print(err)
-		outputErrorMsg(w, http.StatusInternalServerError, "db error")
-		return
 	}
 
 	itemSimples := make([]ItemSimple, 0, len(items))
@@ -1538,8 +1474,8 @@ func NewBuyingMutexMap() BuyingMutexMap {
 }
 func (s *BuyingMutexMap) Add(key int64, cond *sync.Cond) {
 	s.s.Store(key, &BuyingMutex{
-		Result:     nil,
-		Cond:       cond,
+		Result: nil,
+		Cond:   cond,
 		SentSignal: false,
 	})
 }
