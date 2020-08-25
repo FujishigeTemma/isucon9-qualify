@@ -71,7 +71,7 @@ func main() {
 	defer dbx.Close()
 
 	var defaultUsers []struct {
-		Name string `db: account_name`
+		Name string `db:"account_name"`
 	}
 	if err := dbx.Select(&defaultUsers, "SELECT account_name from users"); err != nil {
 		log.Fatalf("failed to get defaultUsers: %s.", err.Error())
