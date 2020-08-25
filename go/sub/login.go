@@ -41,7 +41,7 @@ func main() {
 		"%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=true&loc=Local",
 		"isucari",   // user
 		"isucari",   // password
-		"127.0.0.1", // host
+		"172.16.0.162", // host
 		"3306",      // port
 		"isucari",   // dbname
 	)

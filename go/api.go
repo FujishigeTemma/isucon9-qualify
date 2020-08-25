@@ -197,7 +197,7 @@ func APIAuthCheck(body *io.ReadCloser) (*User, int) {
 	//
 	//	return &User{}, http.StatusInternalServerError
 	//}
-	res, err := http.Post("http://172.16.0.162:8080/auth", "application/json", *body)
+	res, err := http.Post("http://172.16.0.163:8080/auth", "application/json", *body)
 	if err != nil {
 		log.Print(err)
 		fmt.Println(err)
