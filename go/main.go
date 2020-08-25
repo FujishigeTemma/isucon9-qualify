@@ -1222,10 +1222,10 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 }
 
 type ItemE struct {
-	Item                      Item   `db:"i"`
-	TransactionEvidenceID     int64  `db:"te_id"`
-	TransactionEvidenceStatus string `db:"te_status"`
-	ShippingStatus            string `db:"s_status"`
+	Item                      Item           `db:"i"`
+	TransactionEvidenceID     sql.NullInt64  `db:"te_id"`
+	TransactionEvidenceStatus sql.NullString `db:"te_status"`
+	ShippingStatus            sql.NullString `db:"s_status"`
 }
 
 func getItem(w http.ResponseWriter, r *http.Request) {
@@ -1300,15 +1300,15 @@ func getItem(w http.ResponseWriter, r *http.Request) {
 		itemDetail.BuyerID = item.BuyerID
 		itemDetail.Buyer = &buyer
 
-		if itemE.TransactionEvidenceID > 0 {
-			itemDetail.TransactionEvidenceID = itemE.TransactionEvidenceID
-			itemDetail.TransactionEvidenceStatus = itemE.TransactionEvidenceStatus
-			if itemE.ShippingStatus == "" {
+		if itemE.TransactionEvidenceID.Valid && itemE.TransactionEvidenceID.Int64 > 0 {
+			itemDetail.TransactionEvidenceID = itemE.TransactionEvidenceID.Int64
+			itemDetail.TransactionEvidenceStatus = itemE.TransactionEvidenceStatus.String
+			if !itemE.ShippingStatus.Valid {
 				log.Print("db error (shippingStatus is empty)")
 				outputErrorMsg(w, http.StatusInternalServerError, "db error (shippingStatus is empty)")
 				return
 			}
-			itemDetail.ShippingStatus = itemE.ShippingStatus
+			itemDetail.ShippingStatus = itemE.ShippingStatus.String
 		}
 	}
 
