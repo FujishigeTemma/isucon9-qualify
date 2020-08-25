@@ -198,21 +198,21 @@ type resInitialize struct {
 }
 
 type resNewItems struct {
-	RootCategoryID   int          `json:"root_category_id,omitempty"`
-	RootCategoryName string       `json:"root_category_name,omitempty"`
-	HasNext          bool         `json:"has_next"`
-	Items            []ItemSimple `json:"items"`
+	RootCategoryID   int           `json:"root_category_id,omitempty"`
+	RootCategoryName string        `json:"root_category_name,omitempty"`
+	HasNext          bool          `json:"has_next"`
+	Items            []*ItemSimple `json:"items"`
 }
 
 type resUserItems struct {
 	User    *UserSimple  `json:"user"`
 	HasNext bool         `json:"has_next"`
-	Items   []ItemSimple `json:"items"`
+	Items   []*ItemSimple `json:"items"`
 }
 
 type resTransactions struct {
 	HasNext bool         `json:"has_next"`
-	Items   []ItemDetail `json:"items"`
+	Items   []*ItemDetail `json:"items"`
 }
 
 type reqRegister struct {
@@ -419,15 +419,15 @@ func getUserSimpleByID(q sqlx.Queryer, userID int64) (userSimple UserSimple, err
 	return userSimple, nil
 }
 
-func getUserSimplesByIDs(q sqlx.Queryer, userIDs []int64) (userSimpleMap map[int64]UserSimple, err error) {
-	userSimpleMap = make(map[int64]UserSimple)
+func getUserSimplesByIDs(q sqlx.Queryer, userIDs []int64) (userSimpleMap map[int64]*UserSimple, err error) {
+	userSimpleMap = make(map[int64]*UserSimple)
 
 	usersCacheMutex.RLock()
 
 	for _, uID := range userIDs {
 		u, ok := usersCache[uID]
 		if ok {
-			userSimpleMap[uID] = UserSimple{
+			userSimpleMap[uID] = &UserSimple{
 				ID:           u.ID,
 				AccountName:  u.AccountName,
 				NumSellItems: u.NumSellItems,
@@ -582,10 +582,10 @@ func getNewItems(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	itemSimples := make([]ItemSimple, 0, len(items))
-	sellerIds := make([]int64, 0, len(items))
-	for _, item := range items {
-		sellerIds = append(sellerIds, item.SellerID)
+	itemSimples := make([]*ItemSimple, len(items))
+	sellerIds := make([]int64, len(items))
+	for i, item := range items {
+		sellerIds[i] = item.SellerID
 	}
 	sellerSimpleMap, err := getUserSimplesByIDs(dbx, sellerIds)
 	if err != nil {
@@ -593,7 +593,7 @@ func getNewItems(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	for _, item := range items {
+	for i, item := range items {
 		seller := sellerSimpleMap[item.SellerID]
 		//seller, err := getUserSimpleByID(dbx, item.SellerID)
 		//if err != nil {
@@ -605,10 +605,10 @@ func getNewItems(w http.ResponseWriter, r *http.Request) {
 			outputErrorMsg(w, http.StatusNotFound, "category not found")
 			return
 		}
-		itemSimples = append(itemSimples, ItemSimple{
+		itemSimples[i] = &ItemSimple{
 			ID:         item.ID,
 			SellerID:   item.SellerID,
-			Seller:     &seller,
+			Seller:     seller,
 			Status:     item.Status,
 			Name:       item.Name,
 			Price:      item.Price,
@@ -616,7 +616,7 @@ func getNewItems(w http.ResponseWriter, r *http.Request) {
 			CategoryID: item.CategoryID,
 			Category:   &category,
 			CreatedAt:  item.CreatedAt.Unix(),
-		})
+		}
 	}
 
 	hasNext := false
@@ -720,7 +720,7 @@ func getNewCategoryItems(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	itemSimples := make([]ItemSimple, 0, len(items))
+	itemSimples := make([]*ItemSimple, len(items))
 	sellerIds := make([]int64, 0, len(items))
 	for _, item := range items {
 		sellerIds = append(sellerIds, item.SellerID)
@@ -731,7 +731,7 @@ func getNewCategoryItems(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	for _, item := range items {
+	for i, item := range items {
 		seller := sellerSimpleMap[item.SellerID]
 		//seller, err := getUserSimpleByID(dbx, item.SellerID)
 		//if err != nil {
@@ -743,10 +743,10 @@ func getNewCategoryItems(w http.ResponseWriter, r *http.Request) {
 			outputErrorMsg(w, http.StatusNotFound, "category not found")
 			return
 		}
-		itemSimples = append(itemSimples, ItemSimple{
+		itemSimples[i] = &ItemSimple{
 			ID:         item.ID,
 			SellerID:   item.SellerID,
-			Seller:     &seller,
+			Seller:     seller,
 			Status:     item.Status,
 			Name:       item.Name,
 			Price:      item.Price,
@@ -754,7 +754,7 @@ func getNewCategoryItems(w http.ResponseWriter, r *http.Request) {
 			CategoryID: item.CategoryID,
 			Category:   &category,
 			CreatedAt:  item.CreatedAt.Unix(),
-		})
+		}
 	}
 
 	hasNext := false
@@ -813,7 +813,7 @@ func getUserItems(w http.ResponseWriter, r *http.Request) {
 	if userSimple.NumSellItems == 0 {
 		rui := resUserItems{
 			User:    &userSimple,
-			Items:   []ItemSimple{},
+			Items:   []*ItemSimple{},
 			HasNext: false,
 		}
 		w.Header().Set("Content-Type", "application/json;charset=utf-8")
@@ -857,14 +857,14 @@ func getUserItems(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	itemSimples := []ItemSimple{}
-	for _, item := range items {
+	itemSimples := []*ItemSimple{}
+	for i, item := range items {
 		category, err := getCategoryByID(item.CategoryID)
 		if err != nil {
 			outputErrorMsg(w, http.StatusNotFound, "category not found")
 			return
 		}
-		itemSimples = append(itemSimples, ItemSimple{
+		itemSimples[i] = &ItemSimple{
 			ID:         item.ID,
 			SellerID:   item.SellerID,
 			Seller:     &userSimple,
@@ -875,7 +875,7 @@ func getUserItems(w http.ResponseWriter, r *http.Request) {
 			CategoryID: item.CategoryID,
 			Category:   &category,
 			CreatedAt:  item.CreatedAt.Unix(),
-		})
+		}
 	}
 
 	hasNext := false
@@ -1159,8 +1159,8 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	itemDetails := make([]ItemDetail, 0, len(items))
-	for _, item := range items {
+	itemDetails := make([]*ItemDetail, len(items))
+	for i, item := range items {
 		seller := userSimpleMap[item.SellerID]
 		category, err := getCategoryByID(item.CategoryID)
 		if err != nil {
@@ -1172,7 +1172,7 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 		itemDetail := ItemDetail{
 			ID:       item.ID,
 			SellerID: item.SellerID,
-			Seller:   &seller,
+			Seller:   seller,
 			// BuyerID
 			// Buyer
 			Status:      item.Status,
@@ -1191,7 +1191,7 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 		if item.BuyerID != 0 {
 			buyer := userSimpleMap[item.BuyerID]
 			itemDetail.BuyerID = item.BuyerID
-			itemDetail.Buyer = &buyer
+			itemDetail.Buyer = buyer
 		}
 
 		ta, exists := transactionAdditions[item.ID]
@@ -1201,7 +1201,7 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 			itemDetail.ShippingStatus = ta.ShippingStatus
 		}
 
-		itemDetails = append(itemDetails, itemDetail)
+		itemDetails[i] = &itemDetail
 	}
 	tx.Commit()
 
