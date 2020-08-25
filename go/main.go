@@ -73,8 +73,8 @@ var (
 	doneTransactionEvidences map[int64]struct{}
 	buyingMutexMap           BuyingMutexMap
 
-	usersCache               map[int64]User
-	usersCacheMutex          sync.RWMutex
+	usersCache      map[int64]User
+	usersCacheMutex sync.RWMutex
 
 	paymentServiceURL  = DefaultPaymentServiceURL
 	shipmentServiceURL = DefaultShipmentServiceURL
@@ -428,8 +428,8 @@ func getUserSimplesByIDs(q sqlx.Queryer, userIDs []int64) (userSimpleMap map[int
 		u, ok := usersCache[uID]
 		if ok {
 			userSimpleMap[uID] = UserSimple{
-				ID: u.ID,
-				AccountName: u.AccountName,
+				ID:           u.ID,
+				AccountName:  u.AccountName,
 				NumSellItems: u.NumSellItems,
 			}
 		}
@@ -1221,6 +1221,13 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 
 }
 
+type ItemE struct {
+	Item                      Item   `db:"i"`
+	TransactionEvidenceID     int64  `db:"te_id"`
+	TransactionEvidenceStatus string `db:"te_status"`
+	ShippingStatus            string `db:"s_status"`
+}
+
 func getItem(w http.ResponseWriter, r *http.Request) {
 	itemIDStr := pat.Param(r, "item_id")
 	itemID, err := strconv.ParseInt(itemIDStr, 10, 64)
@@ -1235,8 +1242,9 @@ func getItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	item := Item{}
-	err = dbx.Get(&item, "SELECT * FROM `items` WHERE `id` = ?", itemID)
+	itemE := ItemE{}
+	rows := "i.id AS `i.id`, i.seller_id AS `i.seller_id`, i.buyer_id AS `i.buyer_id`, i.status AS `i.status`, i.name AS `i.name`, i.price AS `i.price`, i.description AS `i.description`, i.image_name AS `i.image_name`, i.category_id AS `i.category_id`, i.created_at AS `i.created_at`, i.updated_at AS `i.updated_at`, te.id AS `te_id`, te.status AS `te_status`, s.status AS `s_status`"
+	err = dbx.Get(&itemE, "SELECT "+rows+" FROM `items` AS `i` LEFT JOIN `transaction_evidences` AS `t` ON `t`.`item_id` = `i`.`id` JOIN `shippings` AS `s` ON `s`.`transaction_evidence_id` = `t`.`id` WHERE `i`.`id` = ?", itemID)
 	if err == sql.ErrNoRows {
 		outputErrorMsg(w, http.StatusNotFound, "item not found")
 		return
@@ -1246,6 +1254,7 @@ func getItem(w http.ResponseWriter, r *http.Request) {
 		outputErrorMsg(w, http.StatusInternalServerError, "db error")
 		return
 	}
+	item := itemE.Item
 
 	category, err := getCategoryByID(item.CategoryID)
 	if err != nil {
@@ -1287,35 +1296,10 @@ func getItem(w http.ResponseWriter, r *http.Request) {
 		itemDetail.BuyerID = item.BuyerID
 		itemDetail.Buyer = &buyer
 
-		transactionEvidence := TransactionEvidence{}
-		err = dbx.Get(&transactionEvidence, "SELECT * FROM `transaction_evidences` WHERE `item_id` = ?", item.ID)
-		if err != nil && err != sql.ErrNoRows {
-			// It's able to ignore ErrNoRows
-			log.Print(err)
-			outputErrorMsg(w, http.StatusInternalServerError, "db error")
-			return
-		}
-
-		if transactionEvidence.ID > 0 {
-			itemDetail.TransactionEvidenceID = transactionEvidence.ID
-			itemDetail.TransactionEvidenceStatus = transactionEvidence.Status
-
-			if transactionEvidence.Status == TransactionEvidenceStatusDone {
-				itemDetail.ShippingStatus = ShippingsStatusDone
-			} else {
-				shipping := Shipping{}
-				err = dbx.Get(&shipping, "SELECT * FROM `shippings` WHERE `transaction_evidence_id` = ?", transactionEvidence.ID)
-				if err == sql.ErrNoRows {
-					outputErrorMsg(w, http.StatusNotFound, "shipping not found")
-					return
-				}
-				if err != nil {
-					log.Print(err)
-					outputErrorMsg(w, http.StatusInternalServerError, "db error")
-					return
-				}
-				itemDetail.ShippingStatus = shipping.Status
-			}
+		if itemE.TransactionEvidenceID > 0 {
+			itemDetail.TransactionEvidenceID = itemE.TransactionEvidenceID
+			itemDetail.TransactionEvidenceStatus = itemE.TransactionEvidenceStatus
+			itemDetail.ShippingStatus = itemE.ShippingStatus
 		}
 	}
 
@@ -1491,8 +1475,8 @@ func NewBuyingMutexMap() BuyingMutexMap {
 }
 func (s *BuyingMutexMap) Add(key int64, cond *sync.Cond) {
 	s.s.Store(key, &BuyingMutex{
-		Result: nil,
-		Cond:   cond,
+		Result:     nil,
+		Cond:       cond,
 		SentSignal: false,
 	})
 }
@@ -1651,7 +1635,7 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 	}
 
 	result, err := tx.Exec("INSERT INTO `transaction_evidences` (`seller_id`, `buyer_id`, `status`, `item_id`, `item_name`, `item_price`, `item_description`,`item_category_id`,`item_root_category_id`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-	item.SellerID,
+		item.SellerID,
 		buyer.ID,
 		TransactionEvidenceStatusWaitShipping,
 		item.ID,
