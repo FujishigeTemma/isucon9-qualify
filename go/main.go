@@ -989,7 +989,7 @@ func getShippingStatuses(tx *sqlx.Tx, w http.ResponseWriter, transactionEvidence
 			val, _ := resMap.Load(s.TransactionEvidenceID)
 			if val.err != nil {
 				log.Print(val.err)
-				outputErrorMsg(w, http.StatusInternalServerError, "failed to request to shipment service")
+				outputErrorMsg(w, http.StatusGatewayTimeout, "failed to request to shipment service")
 				tx.Rollback()
 				return ssMap, true
 			}
@@ -1721,7 +1721,7 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 			err = str.err
 			if err != nil {
 				log.Print(err)
-				outputErrorMsg(w, http.StatusInternalServerError, "failed to request to shipment service")
+				outputErrorMsg(w, http.StatusGatewayTimeout, "failed to request to shipment service")
 				tx.Rollback()
 				buyingMutexMap.SetFailure(itemID)
 				return
@@ -1732,7 +1732,7 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				log.Print(err)
 
-				outputErrorMsg(w, http.StatusInternalServerError, "payment service is failed")
+				outputErrorMsg(w, http.StatusGatewayTimeout, "payment service is failed")
 				tx.Rollback()
 				buyingMutexMap.SetFailure(itemID)
 				return
@@ -1861,7 +1861,7 @@ func postShip(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		log.Print(err)
-		outputErrorMsg(w, http.StatusInternalServerError, "failed to request to shipment service")
+		outputErrorMsg(w, http.StatusGatewayTimeout, "failed to request to shipment service")
 		tx.Rollback()
 
 		return
@@ -1967,7 +1967,7 @@ func postShipDone(w http.ResponseWriter, r *http.Request) {
 		status, err = checkShippingStatusWithAPI(shipping.TransactionEvidenceID, shipping.ReserveID)
 		if err != nil {
 			log.Print(err)
-			outputErrorMsg(w, http.StatusInternalServerError, "failed to request to shipment service")
+			outputErrorMsg(w, http.StatusGatewayTimeout, "failed to request to shipment service")
 			tx.Rollback()
 
 			return
