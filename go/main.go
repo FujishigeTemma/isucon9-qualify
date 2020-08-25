@@ -1191,10 +1191,6 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 		HasNext: hasNext,
 	}
 
-	if !hasNext {
-		log.Println("count: ", len(itemDetails), userId)
-	}
-
 	w.Header().Set("Content-Type", "application/json;charset=utf-8")
 	json.NewEncoder(w).Encode(rts)
 
