@@ -73,9 +73,19 @@ var (
 	doneTransactionEvidences map[int64]struct{}
 	buyingMutexMap           BuyingMutexMap
 
+	usersCache               map[int64]User
+	usersCacheMutex          sync.RWMutex
+
 	paymentServiceURL  = DefaultPaymentServiceURL
 	shipmentServiceURL = DefaultShipmentServiceURL
 )
+
+func readUserFromCache(userID int64) (User, bool) {
+	usersCacheMutex.RLock()
+	user, ok := usersCache[userID]
+	usersCacheMutex.RUnlock()
+	return user, ok
+}
 
 type User struct {
 	ID             int64     `json:"id" db:"id"`
@@ -373,18 +383,15 @@ func getCSRFToken(r *http.Request) string {
 
 func getUser(r *http.Request) (user User, errCode int, errMsg string) {
 	session := getSession(r)
-	userID, ok := session.Values["user_id"]
+	userIDRaw, ok := session.Values["user_id"]
 	if !ok {
 		return user, http.StatusNotFound, "no session"
 	}
+	userID := userIDRaw.(int64)
 
-	err := dbx.Get(&user, "SELECT * FROM `users` WHERE `id` = ?", userID)
-	if err == sql.ErrNoRows {
+	user, ok = readUserFromCache(userID)
+	if !ok {
 		return user, http.StatusNotFound, "user not found"
-	}
-	if err != nil {
-		log.Print(err)
-		return user, http.StatusInternalServerError, "db error"
 	}
 
 	return user, http.StatusOK, ""
@@ -401,30 +408,35 @@ func getUserID(r *http.Request) (userID int64, errCode int, errMsg string) {
 }
 
 func getUserSimpleByID(q sqlx.Queryer, userID int64) (userSimple UserSimple, err error) {
-	err = sqlx.Get(q, &userSimple, "SELECT id, account_name, num_sell_items FROM `users` WHERE `id` = ?", userID)
-	if err != nil {
-		return userSimple, err
+	user, ok := readUserFromCache(userID)
+	if !ok {
+		return userSimple, fmt.Errorf("User not found")
 	}
-	return userSimple, err
+
+	userSimple.ID = user.ID
+	userSimple.AccountName = user.AccountName
+	userSimple.NumSellItems = user.NumSellItems
+	return userSimple, nil
 }
 
 func getUserSimplesByIDs(q sqlx.Queryer, userIDs []int64) (userSimpleMap map[int64]UserSimple, err error) {
-	query, args, err := sqlx.In("SELECT id, account_name, num_sell_items FROM `users` WHERE `id` IN (?)", userIDs)
-	if err != nil {
-		return make(map[int64]UserSimple), nil
-	}
-	query = dbx.Rebind(query)
-
-	userSimples := []UserSimple{}
-	err = sqlx.Select(q, &userSimples, query, args...)
-	if err != nil {
-		return userSimpleMap, err
-	}
-
 	userSimpleMap = make(map[int64]UserSimple)
-	for _, u := range userSimples {
-		userSimpleMap[u.ID] = u
+
+	usersCacheMutex.RLock()
+
+	for _, uID := range userIDs {
+		u, ok := usersCache[uID]
+		if ok {
+			userSimpleMap[uID] = UserSimple{
+				ID: u.ID,
+				AccountName: u.AccountName,
+				NumSellItems: u.NumSellItems,
+			}
+		}
 	}
+
+	usersCacheMutex.RUnlock()
+
 	return userSimpleMap, err
 }
 
@@ -464,6 +476,7 @@ func postInitialize(w http.ResponseWriter, r *http.Request) {
 
 	// キャッシュのリセット
 	categoryCache = make(map[int]Category)
+	usersCache = make(map[int64]User)
 	doneTransactionEvidences = make(map[int64]struct{})
 	buyingMutexMap = NewBuyingMutexMap()
 
@@ -485,6 +498,18 @@ func postInitialize(w http.ResponseWriter, r *http.Request) {
 	}
 	for _, c := range categories {
 		categoryCache[c.ID] = c
+	}
+
+	// userのメモリキャッシュ
+	users := []User{}
+	err = dbx.Select(&users, "SELECT * FROM `users`")
+	if err != nil {
+		log.Print(err)
+		outputErrorMsg(w, http.StatusInternalServerError, "user mem cache error")
+		return
+	}
+	for _, u := range users {
+		usersCache[u.ID] = u
 	}
 
 	campaign, err := strconv.Atoi(os.Getenv("CAMPAIGN"))
@@ -1449,18 +1474,6 @@ func getQRCode(w http.ResponseWriter, r *http.Request) {
 	w.Write(shipping.ImgBinary)
 }
 
-type BuyItem struct {
-	SellerID        int64  `db:"i_seller_id"`
-	ItemID          int64  `db:"i_id"`
-	Status          string `db:"i_status"`
-	ItemName        string `db:"i_name"`
-	ItemPrice       int    `db:"i_price"`
-	ItemDescription string `db:"i_description"`
-	CategoryID      int    `db:"i_category_id"`
-	SellerAddress   string `db:"u_address"`
-	SellerName      string `db:"u_account_name"`
-}
-
 type BuyingMutex struct {
 	sync.RWMutex
 	// nilのとき処理中、falseのとき無効なItem、trueのとき売却済み
@@ -1580,8 +1593,8 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 
 	tx := dbx.MustBegin()
 
-	buyItem := BuyItem{}
-	err = tx.Get(&buyItem, "SELECT `i`.`seller_id` as i_seller_id, `i`.`id` as i_id, `i`.`status` as i_status, `i`.`name` as i_name, `i`.`price` as i_price, `i`.`description` as i_description, `i`.`category_id` as i_category_id, `u`.`address` as u_address, `u`.`account_name` as u_account_name FROM `items` as `i` JOIN `users` as `u` ON `i`.`seller_id` = `u`.`id` WHERE `i`.`id` = ? FOR UPDATE", itemID)
+	item := Item{}
+	err = tx.Get(&item, "SELECT * FROM `items` WHERE `items`.`id` = ? FOR UPDATE", itemID)
 	if err == sql.ErrNoRows {
 		outputErrorMsg(w, http.StatusNotFound, "item or item seller not found")
 		tx.Rollback()
@@ -1597,21 +1610,21 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if buyItem.Status != ItemStatusOnSale {
+	if item.Status != ItemStatusOnSale {
 		outputErrorMsg(w, http.StatusForbidden, "item is not for sale")
 		tx.Rollback()
 		buyingMutexMap.SetSuccess(itemID)
 		return
 	}
 
-	if buyItem.SellerID == buyer.ID {
+	if item.SellerID == buyer.ID {
 		outputErrorMsg(w, http.StatusForbidden, "自分の商品は買えません")
 		tx.Rollback()
 		buyingMutexMap.SetFailure(itemID)
 		return
 	}
 
-	category, err := getCategoryByID(buyItem.CategoryID)
+	category, err := getCategoryByID(item.CategoryID)
 	if err != nil {
 		log.Print(err)
 
@@ -1628,14 +1641,23 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// addressとnameは書き変わらないのでRLockでとる
+	sellar, ok := readUserFromCache(item.SellerID)
+	if !ok {
+		outputErrorMsg(w, http.StatusNotFound, "sellar not found")
+		tx.Rollback()
+		buyingMutexMap.SetFailure(itemID)
+		return
+	}
+
 	result, err := tx.Exec("INSERT INTO `transaction_evidences` (`seller_id`, `buyer_id`, `status`, `item_id`, `item_name`, `item_price`, `item_description`,`item_category_id`,`item_root_category_id`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-		buyItem.SellerID,
+	item.SellerID,
 		buyer.ID,
 		TransactionEvidenceStatusWaitShipping,
-		buyItem.ItemID,
-		buyItem.ItemName,
-		buyItem.ItemPrice,
-		buyItem.ItemDescription,
+		item.ID,
+		item.Name,
+		item.Price,
+		item.Description,
 		category.ID,
 		category.ParentID,
 	)
@@ -1662,7 +1684,7 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 		buyer.ID,
 		ItemStatusTrading,
 		time.Now(),
-		buyItem.ItemID,
+		item.ID,
 	)
 	if err != nil {
 		log.Print(err)
@@ -1691,8 +1713,8 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 		scr, err := APIShipmentCreate(shipmentServiceURL, &APIShipmentCreateReq{
 			ToAddress:   buyer.Address,
 			ToName:      buyer.AccountName,
-			FromAddress: buyItem.SellerAddress,
-			FromName:    buyItem.SellerName,
+			FromAddress: sellar.Address,
+			FromName:    sellar.AccountName,
 		})
 		str := ScrStruct{
 			scr: scr,
@@ -1705,7 +1727,7 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 			ShopID: PaymentServiceIsucariShopID,
 			Token:  rb.Token,
 			APIKey: PaymentServiceIsucariAPIKey,
-			Price:  buyItem.ItemPrice,
+			Price:  item.Price,
 		})
 		str := PstrStruct{
 			pstr: pstr,
@@ -1764,14 +1786,14 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 	_, err = tx.Exec("INSERT INTO `shippings` (`transaction_evidence_id`, `status`, `item_name`, `item_id`, `reserve_id`, `reserve_time`, `to_address`, `to_name`, `from_address`, `from_name`, `img_binary`) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
 		transactionEvidenceID,
 		ShippingsStatusInitial,
-		buyItem.ItemName,
-		buyItem.ItemID,
+		item.Name,
+		item.ID,
 		scr.ReserveID,
 		scr.ReserveTime,
 		buyer.Address,
 		buyer.AccountName,
-		buyItem.SellerAddress,
-		buyItem.SellerName,
+		sellar.Address,
+		sellar.AccountName,
 		"",
 	)
 	if err != nil {
@@ -2199,21 +2221,16 @@ func postSell(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tx := dbx.MustBegin()
+	usersCacheMutex.Lock()
+	defer usersCacheMutex.Unlock()
 
-	seller := User{}
-	err = tx.Get(&seller, "SELECT * FROM `users` WHERE `id` = ? FOR UPDATE", userID)
-	if err == sql.ErrNoRows {
+	seller, ok := usersCache[userID]
+	if !ok {
 		outputErrorMsg(w, http.StatusNotFound, "user not found")
-		tx.Rollback()
 		return
 	}
-	if err != nil {
-		log.Print(err)
-		outputErrorMsg(w, http.StatusInternalServerError, "db error")
-		tx.Rollback()
-		return
-	}
+
+	tx := dbx.MustBegin()
 
 	result, err := tx.Exec("INSERT INTO `items` (`seller_id`, `status`, `name`, `price`, `description`,`image_name`,`category_id`) VALUES (?, ?, ?, ?, ?, ?, ?)",
 		seller.ID,
@@ -2239,18 +2256,9 @@ func postSell(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	now := time.Now()
-	_, err = tx.Exec("UPDATE `users` SET `num_sell_items`=?, `last_bump`=? WHERE `id`=?",
-		seller.NumSellItems+1,
-		now,
-		seller.ID,
-	)
-	if err != nil {
-		log.Print(err)
-
-		outputErrorMsg(w, http.StatusInternalServerError, "db error")
-		return
-	}
+	seller.NumSellItems++
+	seller.LastBump = time.Now()
+	usersCache[seller.ID] = seller
 	tx.Commit()
 
 	w.Header().Set("Content-Type", "application/json;charset=utf-8")
@@ -2309,16 +2317,12 @@ func postBump(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	seller := User{}
-	err = tx.Get(&seller, "SELECT * FROM `users` WHERE `id` = ? FOR UPDATE", userID)
-	if err == sql.ErrNoRows {
+	usersCacheMutex.Lock()
+	defer usersCacheMutex.Unlock()
+
+	seller, ok := usersCache[userID]
+	if !ok {
 		outputErrorMsg(w, http.StatusNotFound, "user not found")
-		tx.Rollback()
-		return
-	}
-	if err != nil {
-		log.Print(err)
-		outputErrorMsg(w, http.StatusInternalServerError, "db error")
 		tx.Rollback()
 		return
 	}
@@ -2342,15 +2346,8 @@ func postBump(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err = tx.Exec("UPDATE `users` SET `last_bump`=? WHERE id=?",
-		now,
-		seller.ID,
-	)
-	if err != nil {
-		log.Print(err)
-		outputErrorMsg(w, http.StatusInternalServerError, "db error")
-		return
-	}
+	seller.LastBump = now
+	usersCache[seller.ID] = seller
 
 	err = tx.Get(&targetItem, "SELECT * FROM `items` WHERE `id` = ?", itemID)
 	if err != nil {
@@ -2487,6 +2484,7 @@ func postRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// ログインのためにDBに入れる
 	result, err := dbx.Exec("INSERT INTO `users` (`account_name`, `hashed_password`, `address`) VALUES (?, ?, ?)",
 		accountName,
 		hashedPassword,
@@ -2513,6 +2511,10 @@ func postRegister(w http.ResponseWriter, r *http.Request) {
 		AccountName: accountName,
 		Address:     address,
 	}
+
+	usersCacheMutex.Lock()
+	usersCache[userID] = u
+	usersCacheMutex.Unlock()
 
 	session := getSession(r)
 	session.Values["user_id"] = u.ID
