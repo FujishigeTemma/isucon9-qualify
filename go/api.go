@@ -63,6 +63,8 @@ func APIPaymentToken(paymentURL string, param *APIPaymentServiceTokenReq) (*APIP
 	req.Header.Set("User-Agent", userAgent)
 	req.Header.Set("Content-Type", "application/json")
 
+	start := time.Now()
+
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, err
@@ -76,6 +78,9 @@ func APIPaymentToken(paymentURL string, param *APIPaymentServiceTokenReq) (*APIP
 		}
 		return nil, fmt.Errorf("status code: %d; body: %s", res.StatusCode, b)
 	}
+
+	elapsed := time.Since(start).Seconds()
+	log.Printf("Token: %vs\n", elapsed)
 
 	pstr := &APIPaymentServiceTokenRes{}
 	err = json.NewDecoder(res.Body).Decode(pstr)
@@ -98,11 +103,16 @@ func APIShipmentCreate(shipmentURL string, param *APIShipmentCreateReq) (*APIShi
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", IsucariAPIToken)
 
+	start := time.Now()
+
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
 	defer res.Body.Close()
+
+	elapsed := time.Since(start).Seconds()
+	log.Printf("Create: %vs\n", elapsed)
 
 	if res.StatusCode != http.StatusOK {
 		b, err := ioutil.ReadAll(res.Body)
@@ -133,11 +143,16 @@ func APIShipmentRequest(shipmentURL string, param *APIShipmentRequestReq) ([]byt
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", IsucariAPIToken)
 
+	start := time.Now()
+
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
 	defer res.Body.Close()
+
+	elapsed := time.Since(start).Seconds()
+	log.Printf("Request: %vs\n", elapsed)
 
 	if res.StatusCode != http.StatusOK {
 		b, err := ioutil.ReadAll(res.Body)
