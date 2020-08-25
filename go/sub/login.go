@@ -12,7 +12,6 @@ import (
 	"os"
 	"os/signal"
 	"sync"
-	"syscall"
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -61,11 +60,14 @@ func main() {
 	loadFileCache()
 	// go pollDB(dbx)
 
-	http.HandleFunc("/auth", auth)
-	http.ListenAndServe(":8080", nil)
+	go func() {
+		http.HandleFunc("/auth", auth)
+		http.ListenAndServe(":8080", nil)
+	}()
 
 	quit := make(chan os.Signal)
-	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
+	signal.Notify(quit, os.Interrupt)
+	log.Print("waiting signal")
 	<-quit
 	flushCacheToFile()
 }
@@ -181,9 +183,10 @@ func flushCacheToFile() {
 		log.Fatal(err)
 	}
 	defer file.Close()
-	bytes, _ := json.Marshal(cache)
+	bytes, _ := json.Marshal(&cache)
 	_, err = file.Write(bytes)
 	if err != nil {
 		log.Fatal(err)
 	}
+	log.Print("cache flushed")
 }
