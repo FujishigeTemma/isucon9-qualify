@@ -327,6 +327,7 @@ func main() {
 	defer dbx.Close()
 
 	http.DefaultTransport.(*http.Transport).MaxIdleConnsPerHost = 0
+	http.DefaultClient.Timeout = 5 * time.Second
 
 	mux := goji.NewMux()
 
