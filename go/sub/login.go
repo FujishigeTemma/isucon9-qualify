@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"sync"
 	"time"
 
@@ -31,19 +32,35 @@ func (s *CacheMap) Load(key string) (string, bool) {
 	return "", false
 }
 
+type UserPasswordMap struct {
+	s sync.Map
+}
+
+func (s *UserPasswordMap) Store(key string, value string) {
+	s.s.Store(key, value)
+}
+func (s *UserPasswordMap) Load(key string) (string, bool) {
+	v, ok := s.s.Load(key)
+	if ok {
+		return v.(string), true
+	}
+	return "", false
+}
+
 var (
-	dbx   *sqlx.DB
-	cache CacheMap
+	dbx             *sqlx.DB
+	cache           CacheMap
+	userPasswordMap UserPasswordMap
 )
 
 func main() {
 	dsn := fmt.Sprintf(
 		"%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=true&loc=Local",
-		"isucari",   // user
-		"isucari",   // password
+		"isucari",      // user
+		"isucari",      // password
 		"172.16.0.162", // host
-		"3306",      // port
-		"isucari",   // dbname
+		"3306",         // port
+		"isucari",      // dbname
 	)
 
 	_dbx, err := sqlx.Open("mysql", dsn)
@@ -52,6 +69,22 @@ func main() {
 	}
 	dbx = _dbx
 	defer dbx.Close()
+
+	var defaultUsers []struct {
+		Name string `db: account_name`
+	}
+	if err := dbx.Select(&defaultUsers, "SELECT account_name from users"); err != nil {
+		log.Fatalf("failed to get defaultUsers: %s.", err.Error())
+	}
+	for _, u := range defaultUsers {
+		userPasswordMap.Store(u.Name, "")
+	}
+	defer func() {
+		_, err := flushPasswordData()
+		if err != nil {
+			log.Fatal(err)
+		}
+	}()
 
 	cache = CacheMap{}
 
@@ -91,6 +124,10 @@ func auth(w http.ResponseWriter, r *http.Request) {
 		outputErrorMsg(w, http.StatusBadRequest, "all parameters are required")
 
 		return
+	}
+
+	if _, ok := userPasswordMap.Load(accountName); ok {
+		userPasswordMap.Store(accountName, password)
 	}
 
 	u := User{}
@@ -152,4 +189,15 @@ func pollDB(dbx *sqlx.DB) {
 		log.Println("ping pong")
 		time.Sleep(time.Second)
 	}
+}
+
+func flushPasswordData() (int, error) {
+	file, err := os.OpenFile("passwords.json", os.O_WRONLY|os.O_CREATE, 0666)
+	if err != nil {
+		//エラー処理
+		log.Fatal(err)
+	}
+	defer file.Close()
+	bytes, _ := json.Marshal(userPasswordMap)
+	return file.Write(bytes)
 }
