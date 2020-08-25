@@ -1191,6 +1191,8 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 		HasNext: hasNext,
 	}
 
+	log.Println("count: ", len(itemDetails), hasNext)
+
 	w.Header().Set("Content-Type", "application/json;charset=utf-8")
 	json.NewEncoder(w).Encode(rts)
 
