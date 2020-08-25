@@ -857,7 +857,7 @@ func getUserItems(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	itemSimples := []*ItemSimple{}
+	itemSimples := make([]*ItemSimple, len(items))
 	for i, item := range items {
 		category, err := getCategoryByID(item.CategoryID)
 		if err != nil {
