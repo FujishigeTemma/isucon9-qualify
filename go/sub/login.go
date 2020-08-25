@@ -6,10 +6,13 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"sync"
+	"syscall"
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -32,25 +35,9 @@ func (s *CacheMap) Load(key string) (string, bool) {
 	return "", false
 }
 
-type UserPasswordMap struct {
-	s sync.Map
-}
-
-func (s *UserPasswordMap) Store(key string, value string) {
-	s.s.Store(key, value)
-}
-func (s *UserPasswordMap) Load(key string) (string, bool) {
-	v, ok := s.s.Load(key)
-	if ok {
-		return v.(string), true
-	}
-	return "", false
-}
-
 var (
-	dbx             *sqlx.DB
-	cache           CacheMap
-	userPasswordMap UserPasswordMap
+	dbx   *sqlx.DB
+	cache CacheMap
 )
 
 func main() {
@@ -70,28 +57,17 @@ func main() {
 	dbx = _dbx
 	defer dbx.Close()
 
-	var defaultUsers []struct {
-		Name string `db:"account_name"`
-	}
-	if err := dbx.Select(&defaultUsers, "SELECT account_name from users"); err != nil {
-		log.Fatalf("failed to get defaultUsers: %s.", err.Error())
-	}
-	for _, u := range defaultUsers {
-		userPasswordMap.Store(u.Name, "")
-	}
-	defer func() {
-		_, err := flushPasswordData()
-		if err != nil {
-			log.Fatal(err)
-		}
-	}()
-
 	cache = CacheMap{}
-
+	loadFileCache()
 	// go pollDB(dbx)
 
 	http.HandleFunc("/auth", auth)
 	http.ListenAndServe(":8080", nil)
+
+	quit := make(chan os.Signal)
+	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
+	<-quit
+	flushCacheToFile()
 }
 
 type User struct {
@@ -124,10 +100,6 @@ func auth(w http.ResponseWriter, r *http.Request) {
 		outputErrorMsg(w, http.StatusBadRequest, "all parameters are required")
 
 		return
-	}
-
-	if _, ok := userPasswordMap.Load(accountName); ok {
-		userPasswordMap.Store(accountName, password)
 	}
 
 	u := User{}
@@ -191,13 +163,27 @@ func pollDB(dbx *sqlx.DB) {
 	}
 }
 
-func flushPasswordData() (int, error) {
-	file, err := os.OpenFile("passwords.json", os.O_WRONLY|os.O_CREATE, 0666)
+func loadFileCache() {
+	if _, err := os.Stat("passwords.json"); os.IsNotExist(err) {
+		log.Print("json file does not exist.")
+		return
+	}
+	raw, err := ioutil.ReadFile("passwords.json")
 	if err != nil {
-		//エラー処理
+		log.Fatal(err)
+	}
+	json.Unmarshal(raw, &cache)
+}
+
+func flushCacheToFile() {
+	file, err := os.Create("passwords.json")
+	if err != nil {
 		log.Fatal(err)
 	}
 	defer file.Close()
-	bytes, _ := json.Marshal(userPasswordMap)
-	return file.Write(bytes)
+	bytes, _ := json.Marshal(cache)
+	_, err = file.Write(bytes)
+	if err != nil {
+		log.Fatal(err)
+	}
 }
