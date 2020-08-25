@@ -56,7 +56,7 @@ const (
 	ShippingsStatusShipping   = "shipping"
 	ShippingsStatusDone       = "done"
 
-	BumpChargeSeconds = 1 * time.Second
+	BumpChargeSeconds = 3 * time.Second
 
 	ItemsPerPage        = 48
 	TransactionsPerPage = 10
