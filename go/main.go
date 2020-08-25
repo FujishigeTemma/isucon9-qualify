@@ -1243,8 +1243,8 @@ func getItem(w http.ResponseWriter, r *http.Request) {
 	}
 
 	itemE := ItemE{}
-	rows := "i.id AS `i.id`, i.seller_id AS `i.seller_id`, i.buyer_id AS `i.buyer_id`, i.status AS `i.status`, i.name AS `i.name`, i.price AS `i.price`, i.description AS `i.description`, i.image_name AS `i.image_name`, i.category_id AS `i.category_id`, i.created_at AS `i.created_at`, i.updated_at AS `i.updated_at`, te.id AS `te_id`, te.status AS `te_status`, s.status AS `s_status`"
-	err = dbx.Get(&itemE, "SELECT "+rows+" FROM `items` AS `i` LEFT JOIN (`transaction_evidences` AS `te` ON `te`.`item_id` = `i`.`id` LEFT JOIN `shippings` AS `s` ON `s`.`transaction_evidence_id` = `te`.`id`) WHERE `i`.`id` = ?", itemID)
+	rows := "i.*, te.id AS `te_id`, te.status AS `te_status`, s.status AS `s_status`"
+	err = dbx.Get(&itemE, "SELECT "+rows+" FROM `items` AS `i` LEFT JOIN `transaction_evidences` AS `te` ON `te`.`item_id` = `i`.`id` LEFT JOIN `shippings` AS `s` ON `s`.`transaction_evidence_id` = `te`.`id` WHERE `i`.`id` = ?", itemID)
 	if err == sql.ErrNoRows {
 		outputErrorMsg(w, http.StatusNotFound, "item not found")
 		return
