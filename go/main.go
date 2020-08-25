@@ -569,9 +569,13 @@ func getNewItems(w http.ResponseWriter, r *http.Request) {
 		// paging
 		if len(categories) > 0 {
 			inQuery, inArgs, err = sqlx.In(
-				"SELECT * FROM `items` WHERE `status` = ? AND category_id IN (?) AND (`created_at` < ?  OR (`created_at` <= ? AND `id` < ?)) ORDER BY `created_at` DESC, `id` DESC LIMIT ?",
+				"(SELECT * FROM `items` WHERE `status` = ? AND category_id IN (?) AND (`created_at` < ?  OR (`created_at` <= ? AND `id` < ?)) ORDER BY `created_at` DESC, `id` DESC) UNION (SELECT * FROM `items` WHERE `status` = ? AND (`created_at` < ?  OR (`created_at` <= ? AND `id` < ?)) ORDER BY `created_at` DESC, `id` DESC) LIMIT ?",
 				ItemStatusOnSale,
 				categories,
+				time.Unix(createdAt, 0),
+				time.Unix(createdAt, 0),
+				itemID,
+				ItemStatusOnSale,
 				time.Unix(createdAt, 0),
 				time.Unix(createdAt, 0),
 				itemID,
@@ -591,9 +595,10 @@ func getNewItems(w http.ResponseWriter, r *http.Request) {
 		// 1st page
 		if len(categories) > 0 {
 			inQuery, inArgs, err = sqlx.In(
-				"SELECT * FROM `items` WHERE `status` = ? AND category_id IN (?) ORDER BY `created_at` DESC, `id` DESC LIMIT ?",
+				"(SELECT * FROM `items` WHERE `status` = ? AND category_id IN (?) ORDER BY `created_at` DESC, `id` DESC) UNION (SELECT * FROM `items` WHERE `status` = ? ORDER BY `created_at` DESC, `id` DESC) LIMIT ?",
 				ItemStatusOnSale,
 				categories,
+				ItemStatusOnSale,
 				ItemsPerPage+1,
 			)
 		} else {
