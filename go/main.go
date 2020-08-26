@@ -15,14 +15,13 @@ import (
 	"sync"
 	"time"
 
-	jsoniter "github.com/json-iterator/go"
-
 	_ "net/http/pprof"
 
 	"github.com/felixge/fgprof"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/gorilla/sessions"
 	"github.com/jmoiron/sqlx"
+	jsoniter "github.com/json-iterator/go"
 	goji "goji.io"
 	"goji.io/pat"
 	"golang.org/x/crypto/bcrypt"
@@ -203,13 +202,13 @@ type resNewItems struct {
 }
 
 type resUserItems struct {
-	User    *UserSimple  `json:"user"`
-	HasNext bool         `json:"has_next"`
+	User    *UserSimple   `json:"user"`
+	HasNext bool          `json:"has_next"`
 	Items   []*ItemSimple `json:"items"`
 }
 
 type resTransactions struct {
-	HasNext bool         `json:"has_next"`
+	HasNext bool          `json:"has_next"`
 	Items   []*ItemDetail `json:"items"`
 }
 
@@ -418,7 +417,7 @@ func getUserSimpleByID(q sqlx.Queryer, userID int64) (userSimple UserSimple, err
 }
 
 func getUserSimplesByIDs(q sqlx.Queryer, userIDs []int64) (userSimpleMap map[int64]*UserSimple, err error) {
-	userSimpleMap = make(map[int64]*UserSimple)
+	userSimpleMap = make(map[int64]*UserSimple, len(userIDs))
 
 	usersCacheMutex.RLock()
 
@@ -473,9 +472,7 @@ func postInitialize(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// キャッシュのリセット
-	categoryCache = make(map[int]Category)
-	usersCache = make(map[int64]User)
-	doneTransactionEvidences = make(map[int64]struct{})
+	doneTransactionEvidences = make(map[int64]struct{}, 100)
 	buyingMutexMap = NewBuyingMutexMap()
 
 	// configのメモリキャッシュ
@@ -494,6 +491,7 @@ func postInitialize(w http.ResponseWriter, r *http.Request) {
 		outputErrorMsg(w, http.StatusInternalServerError, "category mem cache error")
 		return
 	}
+	categoryCache = make(map[int]Category, len(categories))
 	for _, c := range categories {
 		categoryCache[c.ID] = c
 	}
@@ -506,6 +504,7 @@ func postInitialize(w http.ResponseWriter, r *http.Request) {
 		outputErrorMsg(w, http.StatusInternalServerError, "user mem cache error")
 		return
 	}
+	usersCache = make(map[int64]User, len(users))
 	for _, u := range users {
 		usersCache[u.ID] = u
 	}
@@ -981,7 +980,7 @@ func getShippingStatuses(tx *sqlx.Tx, w http.ResponseWriter, transactionEvidence
 	}
 
 	resMap := NewAPIShippingStatusMap()
-	ssMap = make(map[int64]string)
+	ssMap = make(map[int64]string, len(shippings))
 	wg := sync.WaitGroup{}
 
 	for _, s := range shippings {
@@ -1045,7 +1044,7 @@ func getTransactionAdditions(tx *sqlx.Tx, w http.ResponseWriter, itemIDs []int64
 		return iMap, true
 	}
 
-	iMap = make(map[int64]TransactionAdditions)
+	iMap = make(map[int64]TransactionAdditions, len(tas))
 	for _, ta := range tas {
 		ta.ShippingStatus = shippingStatusMap[ta.TransactionEvidenceID]
 		iMap[ta.ItemID] = ta
