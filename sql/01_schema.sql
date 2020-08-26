@@ -74,5 +74,6 @@ DROP TABLE IF EXISTS `categories`;
 CREATE TABLE `categories` (
   `id` int unsigned NOT NULL AUTO_INCREMENT PRIMARY KEY,
   `parent_id` int unsigned NOT NULL,
-  `category_name` varchar(191) NOT NULL
+  `category_name` varchar(191) NOT NULL,
+  INDEX idx_parent_id (`parent_id`)
 ) ENGINE=InnoDB DEFAULT CHARACTER SET utf8mb4;
