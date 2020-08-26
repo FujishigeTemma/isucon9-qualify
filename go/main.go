@@ -18,7 +18,6 @@ import (
 	_ "net/http/pprof"
 
 	"github.com/felixge/fgprof"
-	"github.com/go-chi/stampede"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/gorilla/sessions"
 	"github.com/jmoiron/sqlx"
@@ -337,34 +336,27 @@ func main() {
 	http.DefaultTransport.(*http.Transport).MaxIdleConnsPerHost = 0
 	http.DefaultClient.Timeout = 5 * time.Second
 
-	cached := stampede.Handler(512, 1 * time.Second)
-
 	mux := goji.NewMux()
 
-	// API (GET)
-	gets := goji.SubMux()
-	gets.HandleFunc(pat.Get("/new_items.json"), getNewItems)
-	gets.HandleFunc(pat.Get("/new_items/:root_category_id.json"), getNewCategoryItems)
-	gets.HandleFunc(pat.Get("/users/transactions.json"), getTransactions)
-	gets.HandleFunc(pat.Get("/users/:user_id.json"), getUserItems)
-	gets.HandleFunc(pat.Get("/items/:item_id.json"), getItem)
-	gets.HandleFunc(pat.Get("/transactions/:transaction_evidence_id.png"), getQRCode)
-	gets.HandleFunc(pat.Get("/reports.json"), getReports)
-	gets.Use(cached)
-	mux.Handle(pat.New("/*"), gets)
-
-	// API (POST)
+	// API
 	mux.HandleFunc(pat.Post("/initialize"), postInitialize)
+	mux.HandleFunc(pat.Get("/new_items.json"), getNewItems)
+	mux.HandleFunc(pat.Get("/new_items/:root_category_id.json"), getNewCategoryItems)
+	mux.HandleFunc(pat.Get("/users/transactions.json"), getTransactions)
+	mux.HandleFunc(pat.Get("/users/:user_id.json"), getUserItems)
+	mux.HandleFunc(pat.Get("/items/:item_id.json"), getItem)
 	mux.HandleFunc(pat.Post("/items/edit"), postItemEdit)
 	mux.HandleFunc(pat.Post("/buy"), postBuy)
 	mux.HandleFunc(pat.Post("/sell"), postSell)
 	mux.HandleFunc(pat.Post("/ship"), postShip)
 	mux.HandleFunc(pat.Post("/ship_done"), postShipDone)
 	mux.HandleFunc(pat.Post("/complete"), postComplete)
+	mux.HandleFunc(pat.Get("/transactions/:transaction_evidence_id.png"), getQRCode)
 	mux.HandleFunc(pat.Post("/bump"), postBump)
 	mux.HandleFunc(pat.Get("/settings"), getSettings)
 	mux.HandleFunc(pat.Post("/login"), postLogin)
 	mux.HandleFunc(pat.Post("/register"), postRegister)
+	mux.HandleFunc(pat.Get("/reports.json"), getReports)
 
 	log.Fatal(http.ListenAndServe(":8000", mux))
 }
