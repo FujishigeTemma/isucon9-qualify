@@ -338,6 +338,8 @@ func main() {
 
 	mux := goji.NewMux()
 
+	coala := coalaRoute("GET")
+
 	// API
 	mux.HandleFunc(pat.Post("/initialize"), postInitialize)
 	mux.HandleFunc(pat.Get("/new_items.json"), getNewItems)
@@ -357,6 +359,7 @@ func main() {
 	mux.HandleFunc(pat.Post("/login"), postLogin)
 	mux.HandleFunc(pat.Post("/register"), postRegister)
 	mux.HandleFunc(pat.Get("/reports.json"), getReports)
+	mux.Use(coala)
 
 	log.Fatal(http.ListenAndServe(":8000", mux))
 }
