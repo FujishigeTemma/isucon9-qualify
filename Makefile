@@ -2,6 +2,7 @@
 # 設定群
 ##
 export GO111MODULE=on
+HOST_ADDRESS:=118.27.33.49
 #DB_HOST:= ##DBホストアドレス##
 #DB_PORT:= ##DBポート番号##
 #DB_USER:= ##DBユーザー##
@@ -28,7 +29,8 @@ SLACKCAT:=slackcat --tee --channel ##チャンネル名##
 SLACKRAW:=slackcat --channel ##チャンネル名##
 
 # PPROF:=go tool pprof -seconds=120  -png -output pprof.png http://localhost:6060/debug/pprof/profile
-PPROF:=go tool pprof -png -output pprof.png --http=118.27.33.49:6666 http://localhost:6060/debug/fgprof?seconds=120
+# PPROF:=go tool pprof -png -output pprof.png -http=118.27.33.49:6000 -no_browser http://localhost:6060/debug/fgprof?seconds=120
+PPROF:=go tool pprof -output profile.pb.gz -seconds=120 http://localhost:6060/debug/fgprof
 
 PROJECT_ROOT:=~/isucari/webapp/go ##プロジェクトルートディレクトリ##
 BUILD_DIR:=~/isucari/webapp/go ##バイナリ生成先##
@@ -133,7 +135,9 @@ kataru:
 .PHONY: pprof
 pprof:
 	@$(PPROF)
+	@go tool pprof -png -output pprof.png profile.pb.gz
 	@$(SLACKRAW) pprof -n pprof.png ./pprof.png
+	@go tool pprof -http=$(HOST_ADDRESS):6000 -no_browser profile.pb.gz
 
 .PHONY: dumpslow
 dumpslow:
