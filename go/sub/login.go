@@ -33,10 +33,14 @@ func (s *CacheMap) Load(key string) (string, bool) {
 	}
 	return "", false
 }
+func (s *CacheMap) Range(f func(key interface{}, value interface{}) bool) {
+	s.s.Range(f)
+}
 
 var (
-	dbx   *sqlx.DB
-	cache CacheMap
+	dbx          *sqlx.DB
+	cache        CacheMap
+	defaultCache map[string][]byte
 )
 
 func main() {
@@ -68,8 +72,9 @@ func main() {
 	quit := make(chan os.Signal)
 	signal.Notify(quit, os.Interrupt)
 	log.Print("waiting signal")
-	<-quit
-	flushCacheToFile()
+	sig := <-quit
+	log.Print(sig)
+	//flushCacheToFile()
 }
 
 type User struct {
@@ -123,6 +128,18 @@ func auth(w http.ResponseWriter, r *http.Request) {
 			outputErrorMsg(w, http.StatusUnauthorized, "アカウント名かパスワードが間違えています")
 			return
 		}
+	} else if defaultHashedPass, ok := defaultCache[accountName]; ok {
+		err = bcrypt.CompareHashAndPassword(defaultHashedPass, []byte(password))
+		if err == bcrypt.ErrMismatchedHashAndPassword {
+			outputErrorMsg(w, http.StatusUnauthorized, "アカウント名かパスワードが間違えています")
+			return
+		}
+		if err != nil {
+			log.Print(err)
+
+			outputErrorMsg(w, http.StatusInternalServerError, "crypt error")
+			return
+		}
 	} else {
 		err = bcrypt.CompareHashAndPassword(u.HashedPassword, []byte(password))
 		if err == bcrypt.ErrMismatchedHashAndPassword {
@@ -166,15 +183,37 @@ func pollDB(dbx *sqlx.DB) {
 }
 
 func loadFileCache() {
-	if _, err := os.Stat("passwords.json"); os.IsNotExist(err) {
+	//if _, err := os.Stat("passwords.json"); os.IsNotExist(err) {
+	//	log.Print("json file does not exist.")
+	//	return
+	//}
+	//raw, err := ioutil.ReadFile("passwords.json")
+	//if err != nil {
+	//	log.Fatal(err)
+	//}
+	//
+	//defaultUserMap := make(map[string]interface{})
+	//err = json.Unmarshal(raw, &defaultUserMap)
+	//if err != nil {
+	//	log.Fatal(err)
+	//}
+	//for k, v := range defaultUserMap {
+	//	cache.Store(k, v.(string))
+	//}
+
+	if _, err := os.Stat("hashedPasswords.json"); os.IsNotExist(err) {
 		log.Print("json file does not exist.")
 		return
 	}
-	raw, err := ioutil.ReadFile("passwords.json")
+	raw, err := ioutil.ReadFile("hashedPasswords.json")
 	if err != nil {
 		log.Fatal(err)
 	}
-	json.Unmarshal(raw, &cache)
+
+	err = json.Unmarshal(raw, &defaultCache)
+	if err != nil {
+		log.Fatal(err)
+	}
 }
 
 func flushCacheToFile() {
@@ -183,10 +222,44 @@ func flushCacheToFile() {
 		log.Fatal(err)
 	}
 	defer file.Close()
-	bytes, _ := json.Marshal(&cache)
-	_, err = file.Write(bytes)
+
+	file2, err := os.Create("hashedPasswords.json")
 	if err != nil {
 		log.Fatal(err)
 	}
-	log.Print("cache flushed")
+	defer file2.Close()
+
+	defaultUserMap := make(map[string]interface{})
+	cache.Range(func(k interface{}, v interface{}) bool {
+		defaultUserMap[k.(string)] = v.(string)
+		return true
+	})
+
+	bytes, err := json.Marshal(&defaultUserMap)
+	if err != nil {
+		log.Fatal(err)
+	}
+	n, err := file.Write(bytes)
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Printf("cache flushed: %vBytes written", n)
+
+	hashedPasswordMap := make(map[string][]byte)
+	for k, v := range defaultUserMap {
+		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(v.(string)), 4)
+		if err != nil {
+			log.Print(err)
+		}
+		hashedPasswordMap[k] = hashedPassword
+	}
+	bytes, err = json.Marshal(&hashedPasswordMap)
+	if err != nil {
+		log.Fatal(err)
+	}
+	n, err = file2.Write(bytes)
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Printf("cache hashed and flushed: %vBytes written", n)
 }
