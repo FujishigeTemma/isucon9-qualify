@@ -1381,6 +1381,12 @@ func postItemEdit(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+type TEWithS struct {
+	SellerID  int64  `db:"seller_id"`
+	Status    string `db:"status"`
+	ImgBinary []byte `db:"img_binary"`
+}
+
 func getQRCode(w http.ResponseWriter, r *http.Request) {
 	transactionEvidenceIDStr := pat.Param(r, "transaction_evidence_id")
 	transactionEvidenceID, err := strconv.ParseInt(transactionEvidenceIDStr, 10, 64)
@@ -1395,10 +1401,10 @@ func getQRCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	transactionEvidence := TransactionEvidence{}
-	err = dbx.Get(&transactionEvidence, "SELECT * FROM `transaction_evidences` WHERE `id` = ?", transactionEvidenceID)
+	teWithS := TEWithS{}
+	err = dbx.Get(&teWithS, "SELECT `te`.`seller_id` AS `seller_id`, `s`.`status` AS `status`, `s`.`img_binary` AS `img_binary` FROM `transaction_evidences` AS `te` JOIN `shippings` AS `s` ON `te`.`id` = `s`.`transaction_evidence_id` WHERE `te`.`id` = ?", transactionEvidenceID)
 	if err == sql.ErrNoRows {
-		outputErrorMsg(w, http.StatusNotFound, "transaction_evidences not found")
+		outputErrorMsg(w, http.StatusNotFound, "transaction_evidences or shippings not found")
 		return
 	}
 	if err != nil {
@@ -1407,34 +1413,23 @@ func getQRCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if transactionEvidence.SellerID != sellerID {
+	if teWithS.SellerID != sellerID {
 		outputErrorMsg(w, http.StatusForbidden, "権限がありません")
 		return
 	}
 
-	shipping := Shipping{}
-	err = dbx.Get(&shipping, "SELECT * FROM `shippings` WHERE `transaction_evidence_id` = ?", transactionEvidence.ID)
-	if err == sql.ErrNoRows {
-		outputErrorMsg(w, http.StatusNotFound, "shippings not found")
-		return
-	}
-	if err != nil {
-		outputErrorMsg(w, http.StatusInternalServerError, "db error")
-		return
-	}
-
-	if shipping.Status != ShippingsStatusWaitPickup && shipping.Status != ShippingsStatusShipping {
+	if teWithS.Status != ShippingsStatusWaitPickup && teWithS.Status != ShippingsStatusShipping {
 		outputErrorMsg(w, http.StatusForbidden, "qrcode not available")
 		return
 	}
 
-	if len(shipping.ImgBinary) == 0 {
+	if len(teWithS.ImgBinary) == 0 {
 		outputErrorMsg(w, http.StatusInternalServerError, "empty qrcode image")
 		return
 	}
 
 	w.Header().Set("Content-Type", "image/png")
-	w.Write(shipping.ImgBinary)
+	w.Write(teWithS.ImgBinary)
 }
 
 type BuyingMutex struct {
