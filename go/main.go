@@ -341,10 +341,14 @@ func main() {
 
 	mux := goji.NewMux()
 
+	newItems := goji.SubMux()
+	newItems.HandleFunc(pat.Get(".json"), getNewItems)
+	newItems.HandleFunc(pat.Get("/:root_category_id.json"), getNewCategoryItems)
+	newItems.Use(cached)
+
 	// API
 	mux.HandleFunc(pat.Post("/initialize"), postInitialize)
-	mux.HandleFunc(pat.Get("/new_items.json"), getNewItems)
-	mux.HandleFunc(pat.Get("/new_items/:root_category_id.json"), getNewCategoryItems)
+	mux.Handle(pat.New("/new_items"), newItems)
 	mux.HandleFunc(pat.Get("/users/transactions.json"), getTransactions)
 	mux.HandleFunc(pat.Get("/users/:user_id.json"), getUserItems)
 	mux.HandleFunc(pat.Get("/items/:item_id.json"), getItem)
@@ -360,16 +364,6 @@ func main() {
 	mux.HandleFunc(pat.Post("/login"), postLogin)
 	mux.HandleFunc(pat.Post("/register"), postRegister)
 	mux.HandleFunc(pat.Get("/reports.json"), getReports)
-	mux.Use(func(next http.Handler) http.Handler {
-		fn := func(w http.ResponseWriter, r *http.Request) {
-			if r.Method == http.MethodGet {
-				cached(next).ServeHTTP(w, r)
-			} else {
-				next.ServeHTTP(w, r)
-			}
-		}
-		return http.HandlerFunc(fn)
-	})
 
 	log.Fatal(http.ListenAndServe(":8000", mux))
 }
