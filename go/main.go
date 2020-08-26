@@ -979,6 +979,12 @@ func getShippingStatuses(tx *sqlx.Tx, w http.ResponseWriter, transactionEvidence
 		return ssMap, true
 	}
 
+	ssMap = make(map[int64]string, len(shippings))
+	for _, s := range shippings {
+		ssMap[s.TransactionEvidenceID] = s.Status
+	}
+
+	/*
 	resMap := NewAPIShippingStatusMap()
 	ssMap = make(map[int64]string, len(shippings))
 	wg := sync.WaitGroup{}
@@ -1008,6 +1014,7 @@ func getShippingStatuses(tx *sqlx.Tx, w http.ResponseWriter, transactionEvidence
 			ssMap[s.TransactionEvidenceID] = val.Status
 		}
 	}
+	*/
 
 	return ssMap, false
 }
