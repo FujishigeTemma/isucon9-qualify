@@ -1987,7 +1987,7 @@ func postComplete(w http.ResponseWriter, r *http.Request) {
 
 	tx := dbx.MustBegin()
 	transactionEvidence := TransactionEvidence{}
-	err = tx.Get(&transactionEvidence, "SELECT * FROM `transaction_evidences` WHERE `item_id` = ? FOR UPDATE", itemID)
+	err = tx.Get(&transactionEvidence, "SELECT id, buyer_id, status FROM `transaction_evidences` WHERE `item_id` = ? FOR UPDATE", itemID)
 	if err == sql.ErrNoRows {
 		outputErrorMsg(w, http.StatusNotFound, "transaction_evidences not found")
 		tx.Rollback()
@@ -2011,45 +2011,14 @@ func postComplete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	shipping := Shipping{}
-	err = tx.Get(&shipping, "SELECT * FROM `shippings` WHERE `transaction_evidence_id` = ? FOR UPDATE", transactionEvidence.ID)
-	if err != nil {
-		log.Print(err)
-		outputErrorMsg(w, http.StatusInternalServerError, "db error")
-		tx.Rollback()
-		return
-	}
-
-	_, err = tx.Exec("UPDATE `shippings` SET `status` = ?, `updated_at` = ? WHERE `transaction_evidence_id` = ?",
+	_, err = tx.Exec("UPDATE `shippings` AS `s` JOIN `transaction_evidences` AS `te` ON `s`.`transaction_evidence_id` = `te`.`id` JOIN `items` AS `i` ON `i`.`id` = `te`.`item_id` SET `s`.`status` = ?, `s`.`updated_at` = ?, `te`.`status` = ?, `te`.`updated_at` = ?, `i`.`status` = ?, `i`.`updated_at` = ? WHERE `s`.`transaction_evidence_id` = ?",
 		ShippingsStatusDone,
 		time.Now(),
-		transactionEvidence.ID,
-	)
-	if err != nil {
-		log.Print(err)
-
-		outputErrorMsg(w, http.StatusInternalServerError, "db error")
-		tx.Rollback()
-		return
-	}
-
-	_, err = tx.Exec("UPDATE `transaction_evidences` SET `status` = ?, `updated_at` = ? WHERE `id` = ?",
 		TransactionEvidenceStatusDone,
 		time.Now(),
-		transactionEvidence.ID,
-	)
-	if err != nil {
-		log.Print(err)
-
-		outputErrorMsg(w, http.StatusInternalServerError, "db error")
-		tx.Rollback()
-		return
-	}
-
-	_, err = tx.Exec("UPDATE `items` SET `status` = ?, `updated_at` = ? WHERE `id` = ?",
 		ItemStatusSoldOut,
 		time.Now(),
-		itemID,
+		transactionEvidence.ID,
 	)
 	if err != nil {
 		log.Print(err)
