@@ -19,15 +19,13 @@ import (
 
 	"github.com/felixge/fgprof"
 	_ "github.com/go-sql-driver/mysql"
+	"github.com/goccy/go-json"
 	"github.com/gorilla/sessions"
 	"github.com/jmoiron/sqlx"
-	jsoniter "github.com/json-iterator/go"
 	goji "goji.io"
 	"goji.io/pat"
 	"golang.org/x/crypto/bcrypt"
 )
-
-var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 const (
 	sessionName = "session_isucari"
@@ -988,35 +986,35 @@ func getShippingStatuses(tx *sqlx.Tx, w http.ResponseWriter, transactionEvidence
 	}
 
 	/*
-	resMap := NewAPIShippingStatusMap()
-	ssMap = make(map[int64]string, len(shippings))
-	wg := sync.WaitGroup{}
+		resMap := NewAPIShippingStatusMap()
+		ssMap = make(map[int64]string, len(shippings))
+		wg := sync.WaitGroup{}
 
-	for _, s := range shippings {
-		status := checkShippingStatusWithCacheShipping(s.TransactionEvidenceID, s.Status)
-		if status == "" {
-			wg.Add(1)
-			go requestShippingStatus(s.TransactionEvidenceID, s.ReserveID, &resMap, &wg)
-		} else {
-			ssMap[s.TransactionEvidenceID] = status
-		}
-	}
-
-	wg.Wait()
-
-	for _, s := range shippings {
-		_, exists := ssMap[s.TransactionEvidenceID]
-		if !exists {
-			val, _ := resMap.Load(s.TransactionEvidenceID)
-			if val.err != nil {
-				log.Print(val.err)
-				outputErrorMsg(w, http.StatusGatewayTimeout, "failed to request to shipment service")
-				tx.Rollback()
-				return ssMap, true
+		for _, s := range shippings {
+			status := checkShippingStatusWithCacheShipping(s.TransactionEvidenceID, s.Status)
+			if status == "" {
+				wg.Add(1)
+				go requestShippingStatus(s.TransactionEvidenceID, s.ReserveID, &resMap, &wg)
+			} else {
+				ssMap[s.TransactionEvidenceID] = status
 			}
-			ssMap[s.TransactionEvidenceID] = val.Status
 		}
-	}
+
+		wg.Wait()
+
+		for _, s := range shippings {
+			_, exists := ssMap[s.TransactionEvidenceID]
+			if !exists {
+				val, _ := resMap.Load(s.TransactionEvidenceID)
+				if val.err != nil {
+					log.Print(val.err)
+					outputErrorMsg(w, http.StatusGatewayTimeout, "failed to request to shipment service")
+					tx.Rollback()
+					return ssMap, true
+				}
+				ssMap[s.TransactionEvidenceID] = val.Status
+			}
+		}
 	*/
 
 	return ssMap, false
