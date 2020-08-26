@@ -1863,6 +1863,13 @@ func postShip(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(rps)
 }
 
+type TeShipDone struct {
+	TeID      int64  `db:"te_id"`
+	SellerID  int64  `db:"seller_id"`
+	SStatus   string `db:"s_status"`
+	ReserveID string `db:"reserve_id"`
+}
+
 func postShipDone(w http.ResponseWriter, r *http.Request) {
 	reqpsd := reqPostShipDone{}
 
@@ -1889,10 +1896,10 @@ func postShipDone(w http.ResponseWriter, r *http.Request) {
 
 	tx := dbx.MustBegin()
 
-	transactionEvidence := TransactionEvidence{}
-	err = tx.Get(&transactionEvidence, "SELECT * FROM `transaction_evidences` WHERE `item_id` = ? FOR UPDATE", itemID)
+	teShipDone := TeShipDone{}
+	err = tx.Get(&teShipDone, "SELECT `te`.`id` AS `te_id`, `te`.`seller_id` AS `seller_id`, `s`.`status` AS `s_status`, `s`.`reserve_id` AS `reserve_id` FROM `transaction_evidences` as `te` JOIN `shippings` AS `s` ON `te`.`id` = `s`.`transaction_evidence_id` WHERE `te`.`item_id` = ? FOR UPDATE", itemID)
 	if err == sql.ErrNoRows {
-		outputErrorMsg(w, http.StatusNotFound, "transaction_evidences not found")
+		outputErrorMsg(w, http.StatusNotFound, "transaction_evidences or shippings not found")
 		tx.Rollback()
 		return
 	}
@@ -1903,41 +1910,21 @@ func postShipDone(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if transactionEvidence.SellerID != sellerID {
+	if teShipDone.SellerID != sellerID {
 		outputErrorMsg(w, http.StatusForbidden, "権限がありません")
 		tx.Rollback()
 		return
 	}
 
-	if transactionEvidence.Status != TransactionEvidenceStatusWaitShipping {
-		outputErrorMsg(w, http.StatusForbidden, "準備ができていません")
-		tx.Rollback()
-		return
-	}
-
-	shipping := Shipping{}
-	err = tx.Get(&shipping, "SELECT * FROM `shippings` WHERE `transaction_evidence_id` = ? FOR UPDATE", transactionEvidence.ID)
-	if err == sql.ErrNoRows {
-		outputErrorMsg(w, http.StatusNotFound, "shippings not found")
-		tx.Rollback()
-		return
-	}
-	if err != nil {
-		log.Print(err)
-		outputErrorMsg(w, http.StatusInternalServerError, "db error")
-		tx.Rollback()
-		return
-	}
-
-	if shipping.Status != ShippingsStatusWaitPickup {
+	if teShipDone.SStatus != ShippingsStatusWaitPickup {
 		outputErrorMsg(w, http.StatusForbidden, "集荷予約されてません")
 		tx.Rollback()
 		return
 	}
 
-	status := checkShippingStatusWithCacheAny(shipping.TransactionEvidenceID)
+	status := checkShippingStatusWithCacheAny(teShipDone.TeID)
 	if status == "" {
-		status, err = checkShippingStatusWithAPI(shipping.TransactionEvidenceID, shipping.ReserveID)
+		status, err = checkShippingStatusWithAPI(teShipDone.TeID, teShipDone.ReserveID)
 		if err != nil {
 			log.Print(err)
 			outputErrorMsg(w, http.StatusGatewayTimeout, "failed to request to shipment service")
@@ -1953,23 +1940,12 @@ func postShipDone(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err = tx.Exec("UPDATE `shippings` SET `status` = ?, `updated_at` = ? WHERE `transaction_evidence_id` = ?",
+	_, err = tx.Exec("UPDATE `shippings` AS `s` JOIN `transaction_evidences` AS `te` ON `s`.`transaction_evidence_id` = `te`.`id` SET `s`.`status` = ?, `s`.`updated_at` = ?, `te`.`status` = ?, `te`.`updated_at` = ? WHERE `s`.`transaction_evidence_id` = ?",
 		status,
 		time.Now(),
-		transactionEvidence.ID,
-	)
-	if err != nil {
-		log.Print(err)
-
-		outputErrorMsg(w, http.StatusInternalServerError, "db error")
-		tx.Rollback()
-		return
-	}
-
-	_, err = tx.Exec("UPDATE `transaction_evidences` SET `status` = ?, `updated_at` = ? WHERE `id` = ?",
 		TransactionEvidenceStatusWaitDone,
 		time.Now(),
-		transactionEvidence.ID,
+		teShipDone.TeID,
 	)
 	if err != nil {
 		log.Print(err)
@@ -1982,7 +1958,7 @@ func postShipDone(w http.ResponseWriter, r *http.Request) {
 	tx.Commit()
 
 	w.Header().Set("Content-Type", "application/json;charset=utf-8")
-	json.NewEncoder(w).Encode(resBuy{TransactionEvidenceID: transactionEvidence.ID})
+	json.NewEncoder(w).Encode(resBuy{TransactionEvidenceID: teShipDone.TeID})
 }
 
 func postComplete(w http.ResponseWriter, r *http.Request) {
