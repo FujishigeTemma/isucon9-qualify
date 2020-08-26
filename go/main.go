@@ -19,13 +19,15 @@ import (
 
 	"github.com/felixge/fgprof"
 	_ "github.com/go-sql-driver/mysql"
-	"github.com/goccy/go-json"
 	"github.com/gorilla/sessions"
 	"github.com/jmoiron/sqlx"
+	jsoniter "github.com/json-iterator/go"
 	goji "goji.io"
 	"goji.io/pat"
 	"golang.org/x/crypto/bcrypt"
 )
+
+var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 const (
 	sessionName = "session_isucari"
