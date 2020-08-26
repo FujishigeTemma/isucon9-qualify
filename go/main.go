@@ -1328,8 +1328,10 @@ func postItemEdit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	tx := dbx.MustBegin()
+
 	targetItem := Item{}
-	err = dbx.Get(&targetItem, "SELECT * FROM `items` WHERE `id` = ?", itemID)
+	err = tx.Get(&targetItem, "SELECT seller_id, status, created_at FROM `items` WHERE `id` = ? FOR UPDATE", itemID)
 	if err == sql.ErrNoRows {
 		outputErrorMsg(w, http.StatusNotFound, "item not found")
 		return
@@ -1338,20 +1340,12 @@ func postItemEdit(w http.ResponseWriter, r *http.Request) {
 		log.Print(err)
 
 		outputErrorMsg(w, http.StatusInternalServerError, "db error")
+		tx.Rollback()
 		return
 	}
 
 	if targetItem.SellerID != sellerID {
 		outputErrorMsg(w, http.StatusForbidden, "自分の商品以外は編集できません")
-		return
-	}
-
-	tx := dbx.MustBegin()
-	err = tx.Get(&targetItem, "SELECT * FROM `items` WHERE `id` = ? FOR UPDATE", itemID)
-	if err != nil {
-		log.Print(err)
-
-		outputErrorMsg(w, http.StatusInternalServerError, "db error")
 		tx.Rollback()
 		return
 	}
@@ -1362,9 +1356,10 @@ func postItemEdit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	now := time.Now()
 	_, err = tx.Exec("UPDATE `items` SET `price` = ?, `updated_at` = ? WHERE `id` = ?",
 		price,
-		time.Now(),
+		now,
 		itemID,
 	)
 	if err != nil {
@@ -1375,23 +1370,21 @@ func postItemEdit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = tx.Get(&targetItem, "SELECT * FROM `items` WHERE `id` = ?", itemID)
-	if err != nil {
-		log.Print(err)
-		outputErrorMsg(w, http.StatusInternalServerError, "db error")
-		tx.Rollback()
-		return
-	}
-
 	tx.Commit()
 
 	w.Header().Set("Content-Type", "application/json;charset=utf-8")
 	json.NewEncoder(w).Encode(&resItemEdit{
-		ItemID:        targetItem.ID,
-		ItemPrice:     targetItem.Price,
+		ItemID:        itemID,
+		ItemPrice:     price,
 		ItemCreatedAt: targetItem.CreatedAt.Unix(),
-		ItemUpdatedAt: targetItem.UpdatedAt.Unix(),
+		ItemUpdatedAt: now.Unix(),
 	})
+}
+
+type TEWithS struct {
+	SellerID  int64  `db:"seller_id"`
+	Status    string `db:"status"`
+	ImgBinary []byte `db:"img_binary"`
 }
 
 func getQRCode(w http.ResponseWriter, r *http.Request) {
@@ -1408,10 +1401,10 @@ func getQRCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	transactionEvidence := TransactionEvidence{}
-	err = dbx.Get(&transactionEvidence, "SELECT * FROM `transaction_evidences` WHERE `id` = ?", transactionEvidenceID)
+	teWithS := TEWithS{}
+	err = dbx.Get(&teWithS, "SELECT `te`.`seller_id` AS `seller_id`, `s`.`status` AS `status`, `s`.`img_binary` AS `img_binary` FROM `transaction_evidences` AS `te` JOIN `shippings` AS `s` ON `te`.`id` = `s`.`transaction_evidence_id` WHERE `te`.`id` = ?", transactionEvidenceID)
 	if err == sql.ErrNoRows {
-		outputErrorMsg(w, http.StatusNotFound, "transaction_evidences not found")
+		outputErrorMsg(w, http.StatusNotFound, "transaction_evidences or shippings not found")
 		return
 	}
 	if err != nil {
@@ -1420,34 +1413,23 @@ func getQRCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if transactionEvidence.SellerID != sellerID {
+	if teWithS.SellerID != sellerID {
 		outputErrorMsg(w, http.StatusForbidden, "権限がありません")
 		return
 	}
 
-	shipping := Shipping{}
-	err = dbx.Get(&shipping, "SELECT * FROM `shippings` WHERE `transaction_evidence_id` = ?", transactionEvidence.ID)
-	if err == sql.ErrNoRows {
-		outputErrorMsg(w, http.StatusNotFound, "shippings not found")
-		return
-	}
-	if err != nil {
-		outputErrorMsg(w, http.StatusInternalServerError, "db error")
-		return
-	}
-
-	if shipping.Status != ShippingsStatusWaitPickup && shipping.Status != ShippingsStatusShipping {
+	if teWithS.Status != ShippingsStatusWaitPickup && teWithS.Status != ShippingsStatusShipping {
 		outputErrorMsg(w, http.StatusForbidden, "qrcode not available")
 		return
 	}
 
-	if len(shipping.ImgBinary) == 0 {
+	if len(teWithS.ImgBinary) == 0 {
 		outputErrorMsg(w, http.StatusInternalServerError, "empty qrcode image")
 		return
 	}
 
 	w.Header().Set("Content-Type", "image/png")
-	w.Write(shipping.ImgBinary)
+	w.Write(teWithS.ImgBinary)
 }
 
 type BuyingMutex struct {
@@ -1788,6 +1770,13 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(resBuy{TransactionEvidenceID: transactionEvidenceID})
 }
 
+type TeShip struct {
+	TeID      int64  `db:"te_id"`
+	SellerID  int64  `db:"seller_id"`
+	TeStatus  string `db:"te_status"`
+	ReserveID string `db:"reserve_id"`
+}
+
 func postShip(w http.ResponseWriter, r *http.Request) {
 	reqps := reqPostShip{}
 
@@ -1814,10 +1803,10 @@ func postShip(w http.ResponseWriter, r *http.Request) {
 
 	tx := dbx.MustBegin()
 
-	transactionEvidence := TransactionEvidence{}
-	err = tx.Get(&transactionEvidence, "SELECT * FROM `transaction_evidences` WHERE `item_id` = ? FOR UPDATE", itemID)
+	teShip := TeShip{}
+	err = tx.Get(&teShip, "SELECT `te`.`id` AS `te_id`, `te`.`seller_id` AS `seller_id`, `te`.`status` AS `te_status`, `s`.`reserve_id` AS `reserve_id` FROM `transaction_evidences` as `te` JOIN `shippings` AS `s` ON `te`.`id` = `s`.`transaction_evidence_id` WHERE `te`.`item_id` = ? FOR UPDATE", itemID)
 	if err == sql.ErrNoRows {
-		outputErrorMsg(w, http.StatusNotFound, "transaction_evidences not found")
+		outputErrorMsg(w, http.StatusNotFound, "transaction_evidences or shippings not found")
 		tx.Rollback()
 		return
 	}
@@ -1828,34 +1817,20 @@ func postShip(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if transactionEvidence.SellerID != sellerID {
+	if teShip.SellerID != sellerID {
 		outputErrorMsg(w, http.StatusForbidden, "権限がありません")
 		tx.Rollback()
 		return
 	}
 
-	if transactionEvidence.Status != TransactionEvidenceStatusWaitShipping {
+	if teShip.TeStatus != TransactionEvidenceStatusWaitShipping {
 		outputErrorMsg(w, http.StatusForbidden, "準備ができていません")
 		tx.Rollback()
 		return
 	}
 
-	shipping := Shipping{}
-	err = tx.Get(&shipping, "SELECT * FROM `shippings` WHERE `transaction_evidence_id` = ? FOR UPDATE", transactionEvidence.ID)
-	if err == sql.ErrNoRows {
-		outputErrorMsg(w, http.StatusNotFound, "shippings not found")
-		tx.Rollback()
-		return
-	}
-	if err != nil {
-		log.Print(err)
-		outputErrorMsg(w, http.StatusInternalServerError, "db error")
-		tx.Rollback()
-		return
-	}
-
 	img, err := APIShipmentRequest(shipmentServiceURL, &APIShipmentRequestReq{
-		ReserveID: shipping.ReserveID,
+		ReserveID: teShip.ReserveID,
 	})
 	if err != nil {
 		log.Print(err)
@@ -1869,7 +1844,7 @@ func postShip(w http.ResponseWriter, r *http.Request) {
 		ShippingsStatusWaitPickup,
 		img,
 		time.Now(),
-		transactionEvidence.ID,
+		teShip.TeID,
 	)
 	if err != nil {
 		log.Print(err)
@@ -1882,8 +1857,8 @@ func postShip(w http.ResponseWriter, r *http.Request) {
 	tx.Commit()
 
 	rps := resPostShip{
-		Path:      fmt.Sprintf("/transactions/%d.png", transactionEvidence.ID),
-		ReserveID: shipping.ReserveID,
+		Path:      fmt.Sprintf("/transactions/%d.png", teShip.TeID),
+		ReserveID: teShip.ReserveID,
 	}
 	json.NewEncoder(w).Encode(rps)
 }
