@@ -5,7 +5,7 @@ go 1.12
 require (
 	github.com/felixge/fgprof v0.9.1
 	github.com/go-sql-driver/mysql v1.5.0
-	github.com/goccy/go-json v0.1.10
+	github.com/goccy/go-json v0.1.11-0.20200825102544-0709cb2fa000
 	github.com/gorilla/sessions v1.2.0
 	github.com/jmoiron/sqlx v1.2.0
 	goji.io v2.0.2+incompatible
