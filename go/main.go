@@ -337,7 +337,7 @@ func main() {
 	http.DefaultTransport.(*http.Transport).MaxIdleConnsPerHost = 0
 	http.DefaultClient.Timeout = 5 * time.Second
 
-	cached := stampede.Handler(512, 0)
+	cached := stampede.Handler(512, 1*time.Second)
 
 	mux := goji.NewMux()
 
