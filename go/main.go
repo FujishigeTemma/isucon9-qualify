@@ -1804,7 +1804,7 @@ func postShip(w http.ResponseWriter, r *http.Request) {
 	tx := dbx.MustBegin()
 
 	teShip := TeShip{}
-	err = tx.Get(&teShip, "SELECT `te`.`id` AS `te_id`, `te`.`seller_id` AS `seller_id`, `te`.`status` AS `te_status`, `s`.`reserve_id` AS `reserve_id` FROM `transaction_evidences` as `te` JOIN `shippings` AS `s` ON `te`.`id` = `s`.`transaction_evidence_id` WHERE `item_id` = ? FOR UPDATE", itemID)
+	err = tx.Get(&teShip, "SELECT `te`.`id` AS `te_id`, `te`.`seller_id` AS `seller_id`, `te`.`status` AS `te_status`, `s`.`reserve_id` AS `reserve_id` FROM `transaction_evidences` as `te` JOIN `shippings` AS `s` ON `te`.`id` = `s`.`transaction_evidence_id` WHERE `te`.`item_id` = ? FOR UPDATE", itemID)
 	if err == sql.ErrNoRows {
 		outputErrorMsg(w, http.StatusNotFound, "transaction_evidences or shippings not found")
 		tx.Rollback()
