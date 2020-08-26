@@ -643,6 +643,13 @@ func getNewCategoryItems(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	categoryIDs := make([]int, 0)
+	for _, c := range categoryCache {
+		if rootCategory.ID == c.ParentID {
+			categoryIDs = append(categoryIDs, c.ID)
+		}
+	}
+
 	query := r.URL.Query()
 	itemIDStr := query.Get("item_id")
 	var itemID int64
@@ -664,13 +671,14 @@ func getNewCategoryItems(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	items := []Item{}
+	var inQuery string
+	var inArgs []interface{}
 	if itemID > 0 && createdAt > 0 {
 		// paging
-		err := dbx.Select(&items,
-			"SELECT i.* FROM `items` AS `i` JOIN `categories` AS `c` ON `i`.`category_id` = `c`.parent_id WHERE `i`.`status` = ? AND `c`.`parent_id` = ? AND (`i`.`created_at` < ?  OR (`i`.`created_at` = ? AND `i`.`id` < ?)) ORDER BY `i`.`created_at` DESC, `i`.`id` DESC LIMIT ?",
+		inQuery, inArgs, err = sqlx.In(
+			"SELECT * FROM `items` WHERE `status` = ? AND category_id IN (?) AND (`created_at` < ?  OR (`created_at` = ? AND `id` < ?)) ORDER BY `created_at` DESC, `id` DESC LIMIT ?",
 			ItemStatusOnSale,
-			rootCategoryID,
+			categoryIDs,
 			time.Unix(createdAt, 0),
 			time.Unix(createdAt, 0),
 			itemID,
@@ -683,10 +691,10 @@ func getNewCategoryItems(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		// 1st page
-		err := dbx.Select(&items,
-			"SELECT i.* FROM `items` AS `i` JOIN `categories` AS `c` ON `i`.`category_id` = `c`.parent_id WHERE `i`.`status` = ? AND `c`.`parent_id` = ? ORDER BY `i`.created_at DESC, `i`.id DESC LIMIT ?",
+		inQuery, inArgs, err = sqlx.In(
+			"SELECT * FROM `items` WHERE `status` = ? AND category_id IN (?) ORDER BY created_at DESC, id DESC LIMIT ?",
 			ItemStatusOnSale,
-			rootCategoryID,
+			categoryIDs,
 			ItemsPerPage+1,
 		)
 		if err != nil {
@@ -695,6 +703,9 @@ func getNewCategoryItems(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+
+	items := []Item{}
+	err = dbx.Select(&items, inQuery, inArgs...)
 
 	if err != nil {
 		log.Print(err)
