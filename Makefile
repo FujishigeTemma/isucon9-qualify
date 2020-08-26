@@ -30,7 +30,7 @@ SLACKRAW:=slackcat --channel ##チャンネル名##
 
 # PPROF:=go tool pprof -seconds=120  -png -output pprof.png http://localhost:6060/debug/pprof/profile
 # PPROF:=go tool pprof -png -output pprof.png -http=118.27.33.49:6000 -no_browser http://localhost:6060/debug/fgprof?seconds=120
-PPROF:=go tool pprof -output profile.pb.gz -seconds=120 http://localhost:6060/debug/fgprof
+PPROF:=go tool pprof -proto -output profile.pb.gz -seconds=120 http://localhost:6060/debug/fgprof
 
 PROJECT_ROOT:=~/isucari/webapp/go ##プロジェクトルートディレクトリ##
 BUILD_DIR:=~/isucari/webapp/go ##バイナリ生成先##
