@@ -554,7 +554,7 @@ func getNewItems(w http.ResponseWriter, r *http.Request) {
 	if itemID > 0 && createdAt > 0 {
 		// paging
 		err := dbx.Select(&items,
-			"SELECT id, seller_id, status, name, price, image_name, category_id, created_at FROM `items` WHERE `status` = ? AND (`created_at` < ?  OR (`created_at` = ? AND `id` < ?)) ORDER BY `created_at` DESC, `id` DESC LIMIT ?",
+			"SELECT id, seller_id, status, name, price, image_name, category_id, created_at FROM `items` WHERE `status` = ? AND (`created_at` < ?  OR (`created_at` = ? AND `id` < ?)) ORDER BY `created_at` DESC LIMIT ?",
 			ItemStatusOnSale,
 			time.Unix(createdAt, 0),
 			time.Unix(createdAt, 0),
@@ -569,7 +569,7 @@ func getNewItems(w http.ResponseWriter, r *http.Request) {
 	} else {
 		// 1st page
 		err := dbx.Select(&items,
-			"SELECT id, seller_id, status, name, price, image_name, category_id, created_at FROM `items` WHERE `status` = ? ORDER BY `created_at` DESC, `id` DESC LIMIT ?",
+			"SELECT id, seller_id, status, name, price, image_name, category_id, created_at FROM `items` WHERE `status` = ? ORDER BY `created_at` DESC LIMIT ?",
 			ItemStatusOnSale,
 			ItemsPerPage+1,
 		)
@@ -679,7 +679,7 @@ func getNewCategoryItems(w http.ResponseWriter, r *http.Request) {
 	if itemID > 0 && createdAt > 0 {
 		// paging
 		inQuery, inArgs, err = sqlx.In(
-			"SELECT * FROM `items` WHERE `status` = ? AND category_id IN (?) AND (`created_at` < ?  OR (`created_at` = ? AND `id` < ?)) ORDER BY `created_at` DESC, `id` DESC LIMIT ?",
+			"SELECT * FROM `items` WHERE `status` = ? AND category_id IN (?) AND (`created_at` < ?  OR (`created_at` = ? AND `id` < ?)) ORDER BY `created_at` DESC LIMIT ?",
 			ItemStatusOnSale,
 			categoryIDs,
 			time.Unix(createdAt, 0),
@@ -695,7 +695,7 @@ func getNewCategoryItems(w http.ResponseWriter, r *http.Request) {
 	} else {
 		// 1st page
 		inQuery, inArgs, err = sqlx.In(
-			"SELECT * FROM `items` WHERE `status` = ? AND category_id IN (?) ORDER BY created_at DESC, id DESC LIMIT ?",
+			"SELECT * FROM `items` WHERE `status` = ? AND category_id IN (?) ORDER BY created_at DESC LIMIT ?",
 			ItemStatusOnSale,
 			categoryIDs,
 			ItemsPerPage+1,
@@ -821,7 +821,7 @@ func getUserItems(w http.ResponseWriter, r *http.Request) {
 	if itemID > 0 && createdAt > 0 {
 		// paging
 		err := dbx.Select(&items,
-			"SELECT * FROM `items` WHERE `seller_id` = ? AND (`created_at` < ?  OR (`created_at` = ? AND `id` < ?)) ORDER BY `created_at` DESC, `id` DESC LIMIT ?",
+			"SELECT * FROM `items` WHERE `seller_id` = ? AND (`created_at` < ?  OR (`created_at` = ? AND `id` < ?)) ORDER BY `created_at` DESC LIMIT ?",
 			userSimple.ID,
 			time.Unix(createdAt, 0),
 			time.Unix(createdAt, 0),
@@ -836,7 +836,7 @@ func getUserItems(w http.ResponseWriter, r *http.Request) {
 	} else {
 		// 1st page
 		err := dbx.Select(&items,
-			"SELECT * FROM `items` WHERE `seller_id` = ? ORDER BY `created_at` DESC, `id` DESC LIMIT ?",
+			"SELECT * FROM `items` WHERE `seller_id` = ? ORDER BY `created_at` DESC LIMIT ?",
 			userSimple.ID,
 			ItemsPerPage+1,
 		)
@@ -1096,7 +1096,7 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 	if itemID > 0 && createdAt > 0 {
 		// paging
 		err := tx.Select(&items,
-			"SELECT * FROM `items` WHERE (`seller_id` = ? OR `buyer_id` = ?) AND (`created_at` < ?  OR (`created_at` = ? AND `id` < ?)) ORDER BY `created_at` DESC, `id` DESC LIMIT ?",
+			"SELECT * FROM `items` WHERE (`seller_id` = ? OR `buyer_id` = ?) AND (`created_at` < ?  OR (`created_at` = ? AND `id` < ?)) ORDER BY `created_at` DESC LIMIT ?",
 			userId,
 			userId,
 			time.Unix(createdAt, 0),
@@ -1113,7 +1113,7 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 	} else {
 		// 1st page
 		err := tx.Select(&items,
-			"SELECT * FROM `items` WHERE (`seller_id` = ? OR `buyer_id` = ?) ORDER BY `created_at` DESC, `id` DESC LIMIT ?",
+			"SELECT * FROM `items` WHERE (`seller_id` = ? OR `buyer_id` = ?) ORDER BY `created_at` DESC LIMIT ?",
 			userId,
 			userId,
 			TransactionsPerPage+1,
