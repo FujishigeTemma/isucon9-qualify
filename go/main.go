@@ -111,16 +111,16 @@ func NewItemsPool(length int) ItemsPool {
 	return ItemsPool{
 		p: sync.Pool{
 			New: func() interface{} {
-				items := make([]Item, 0, length)
-				return &items
+				return make([]Item, 0, length)
 			},
 		},
 	}
 }
-func (p *ItemsPool) Get() *[]Item {
-	return p.p.Get().(*[]Item)
+func (p *ItemsPool) Get() []Item {
+	return p.p.Get().([]Item)
 }
-func (p *ItemsPool) Put(i *[]Item) {
+func (p *ItemsPool) Put(i []Item) {
+	i = i[:0]
 	p.p.Put(i)
 }
 
@@ -586,7 +586,7 @@ func getNewItems(w http.ResponseWriter, r *http.Request) {
 	items := itemsPool.Get()
 	if itemID > 0 && createdAt > 0 {
 		// paging
-		err := dbx.Select(items,
+		err := dbx.Select(&items,
 			"SELECT id, seller_id, status, name, price, image_name, category_id, created_at FROM `items` WHERE `status` = ? AND (`created_at` < ?  OR (`created_at` = ? AND `id` < ?)) ORDER BY `created_at` DESC LIMIT ?",
 			ItemStatusOnSale,
 			time.Unix(createdAt, 0),
@@ -601,7 +601,7 @@ func getNewItems(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		// 1st page
-		err := dbx.Select(items,
+		err := dbx.Select(&items,
 			"SELECT id, seller_id, status, name, price, image_name, category_id, created_at FROM `items` WHERE `status` = ? ORDER BY `created_at` DESC LIMIT ?",
 			ItemStatusOnSale,
 			ItemsPerPage+1,
@@ -613,9 +613,9 @@ func getNewItems(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	itemSimples := make([]*ItemSimple, len(*items))
-	sellerIds := make([]int64, len(*items))
-	for i, item := range *items {
+	itemSimples := make([]*ItemSimple, len(items))
+	sellerIds := make([]int64, len(items))
+	for i, item := range items {
 		sellerIds[i] = item.SellerID
 	}
 	sellerSimpleMap, err := getUserSimplesByIDs(dbx, sellerIds)
@@ -624,7 +624,7 @@ func getNewItems(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	for i, item := range *items {
+	for i, item := range items {
 		seller := sellerSimpleMap[item.SellerID]
 		//seller, err := getUserSimpleByID(dbx, item.SellerID)
 		//if err != nil {
@@ -650,6 +650,8 @@ func getNewItems(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	itemsPool.Put(items)
+
 	hasNext := false
 	if len(itemSimples) > ItemsPerPage {
 		hasNext = true
@@ -664,7 +666,6 @@ func getNewItems(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json;charset=utf-8")
 	json.NewEncoder(w).Encode(rni)
 
-	itemsPool.Put(items)
 }
 
 func getNewCategoryItems(w http.ResponseWriter, r *http.Request) {
@@ -738,7 +739,7 @@ func getNewCategoryItems(w http.ResponseWriter, r *http.Request) {
 	}
 
 	items := itemsPool.Get()
-	err = dbx.Select(items, inQuery, inArgs...)
+	err = dbx.Select(&items, inQuery, inArgs...)
 
 	if err != nil {
 		log.Print(err)
@@ -746,9 +747,9 @@ func getNewCategoryItems(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	itemSimples := make([]*ItemSimple, len(*items))
-	sellerIds := make([]int64, 0, len(*items))
-	for _, item := range *items {
+	itemSimples := make([]*ItemSimple, len(items))
+	sellerIds := make([]int64, 0, len(items))
+	for _, item := range items {
 		sellerIds = append(sellerIds, item.SellerID)
 	}
 	sellerSimpleMap, err := getUserSimplesByIDs(dbx, sellerIds)
@@ -757,7 +758,7 @@ func getNewCategoryItems(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	for i, item := range *items {
+	for i, item := range items {
 		seller := sellerSimpleMap[item.SellerID]
 		//seller, err := getUserSimpleByID(dbx, item.SellerID)
 		//if err != nil {
@@ -783,6 +784,8 @@ func getNewCategoryItems(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	itemsPool.Put(items)
+
 	hasNext := false
 	if len(itemSimples) > ItemsPerPage {
 		hasNext = true
@@ -799,7 +802,6 @@ func getNewCategoryItems(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json;charset=utf-8")
 	json.NewEncoder(w).Encode(rni)
 
-	itemsPool.Put(items)
 }
 
 func getUserItems(w http.ResponseWriter, r *http.Request) {
@@ -851,7 +853,7 @@ func getUserItems(w http.ResponseWriter, r *http.Request) {
 	items := itemsPool.Get()
 	if itemID > 0 && createdAt > 0 {
 		// paging
-		err := dbx.Select(items,
+		err := dbx.Select(&items,
 			"SELECT * FROM `items` WHERE `seller_id` = ? AND (`created_at` < ?  OR (`created_at` = ? AND `id` < ?)) ORDER BY `created_at` DESC LIMIT ?",
 			userSimple.ID,
 			time.Unix(createdAt, 0),
@@ -866,7 +868,7 @@ func getUserItems(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		// 1st page
-		err := dbx.Select(items,
+		err := dbx.Select(&items,
 			"SELECT * FROM `items` WHERE `seller_id` = ? ORDER BY `created_at` DESC LIMIT ?",
 			userSimple.ID,
 			ItemsPerPage+1,
@@ -878,8 +880,8 @@ func getUserItems(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	itemSimples := make([]*ItemSimple, len(*items))
-	for i, item := range *items {
+	itemSimples := make([]*ItemSimple, len(items))
+	for i, item := range items {
 		category, err := getCategoryByID(item.CategoryID)
 		if err != nil {
 			outputErrorMsg(w, http.StatusNotFound, "category not found")
@@ -899,6 +901,8 @@ func getUserItems(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	itemsPool.Put(items)
+
 	hasNext := false
 	if len(itemSimples) > ItemsPerPage {
 		hasNext = true
@@ -914,7 +918,6 @@ func getUserItems(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json;charset=utf-8")
 	json.NewEncoder(w).Encode(rui)
 
-	itemsPool.Put(items)
 }
 
 type TransactionAdditions struct {
@@ -1128,7 +1131,7 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 	items := itemsTPool.Get()
 	if itemID > 0 && createdAt > 0 {
 		// paging
-		err := tx.Select(items,
+		err := tx.Select(&items,
 			"SELECT * FROM `items` WHERE (`seller_id` = ? OR `buyer_id` = ?) AND (`created_at` < ?  OR (`created_at` = ? AND `id` < ?)) ORDER BY `created_at` DESC LIMIT ?",
 			userId,
 			userId,
@@ -1145,7 +1148,7 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		// 1st page
-		err := tx.Select(items,
+		err := tx.Select(&items,
 			"SELECT * FROM `items` WHERE (`seller_id` = ? OR `buyer_id` = ?) ORDER BY `created_at` DESC LIMIT ?",
 			userId,
 			userId,
@@ -1159,9 +1162,9 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	userIds := make([]int64, 0, len(*items)*2)
-	itemIds := make([]int64, 0, len(*items))
-	for _, item := range *items {
+	userIds := make([]int64, 0, len(items)*2)
+	itemIds := make([]int64, 0, len(items))
+	for _, item := range items {
 		userIds = append(userIds, item.SellerID)
 		userIds = append(userIds, item.BuyerID)
 		itemIds = append(itemIds, item.ID)
@@ -1179,8 +1182,8 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	itemDetails := make([]*ItemDetail, len(*items))
-	for i, item := range *items {
+	itemDetails := make([]*ItemDetail, len(items))
+	for i, item := range items {
 		seller := userSimpleMap[item.SellerID]
 		category, err := getCategoryByID(item.CategoryID)
 		if err != nil {
@@ -1225,6 +1228,8 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 	}
 	tx.Commit()
 
+	itemsTPool.Put(items)
+
 	hasNext := false
 	if len(itemDetails) > TransactionsPerPage {
 		hasNext = true
@@ -1239,7 +1244,6 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json;charset=utf-8")
 	json.NewEncoder(w).Encode(rts)
 
-	itemsTPool.Put(items)
 }
 
 type ItemEPool struct {
