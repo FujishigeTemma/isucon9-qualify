@@ -6,8 +6,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
-
-	"github.com/labstack/echo/v4"
+  "github.com/labstack/echo/v4"
 )
 
 // Route middleware handler will coalesce multiple requests for the same URI
@@ -30,6 +29,7 @@ func coalaRoute(methods ...string) func(next echo.HandlerFunc) echo.HandlerFunc 
 			}
 
 			defer coalescer.Flush(bw, c.Request())
+			next(c)
 			return nil
 		}
 	}
