@@ -26,7 +26,10 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-var json = jsoniter.ConfigDefault
+var json = jsoniter.Config{
+	EscapeHTML: false,
+	ObjectFieldMustBeSimpleString: true,
+}.Froze()
 
 const (
 	sessionName = "session_isucari"
