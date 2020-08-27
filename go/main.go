@@ -1565,45 +1565,6 @@ func (s *BuyingMutexMap) Delete(key int64) {
 	s.s.Delete(key)
 }
 
-type TxrStruct struct {
-	teID  int64
-	err error
-}
-func txBuy(tx *sqlx.Tx, item Item, buyer User, category Category, res chan TxrStruct) {
-	result, err := tx.Exec("INSERT INTO `transaction_evidences` (`seller_id`, `buyer_id`, `status`, `item_id`, `item_name`, `item_price`, `item_description`,`item_category_id`,`item_root_category_id`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-		item.SellerID,
-		buyer.ID,
-		TransactionEvidenceStatusWaitShipping,
-		item.ID,
-		item.Name,
-		item.Price,
-		item.Description,
-		category.ID,
-		category.ParentID,
-	)
-	if err != nil {
-		res <- TxrStruct{ teID: 0, err: err }
-		return
-	}
-
-	transactionEvidenceID, err := result.LastInsertId()
-	if err != nil {
-		res <- TxrStruct{ teID: 0, err: err }
-		return
-	}
-
-	_, err = tx.Exec("UPDATE `items` SET `buyer_id` = ?, `status` = ?, `updated_at` = ? WHERE `id` = ?",
-		buyer.ID,
-		ItemStatusTrading,
-		time.Now(),
-		item.ID,
-	)
-	if err != nil {
-		res <- TxrStruct{ teID: transactionEvidenceID, err: err }
-		return
-	}
-}
-
 func postBuy(w http.ResponseWriter, r *http.Request) {
 	rb := reqBuy{}
 
@@ -1707,7 +1668,52 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var transactionEvidenceID int64
+	result, err := tx.Exec("INSERT INTO `transaction_evidences` (`seller_id`, `buyer_id`, `status`, `item_id`, `item_name`, `item_price`, `item_description`,`item_category_id`,`item_root_category_id`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		item.SellerID,
+		buyer.ID,
+		TransactionEvidenceStatusWaitShipping,
+		item.ID,
+		item.Name,
+		item.Price,
+		item.Description,
+		category.ID,
+		category.ParentID,
+	)
+	if err != nil {
+		log.Print(err)
+
+		outputErrorMsg(w, http.StatusInternalServerError, "db error")
+		tx.Rollback()
+		buyingMutexMap.SetFailure(itemID)
+		return
+	}
+
+	transactionEvidenceID, err := result.LastInsertId()
+	if err != nil {
+		log.Print(err)
+
+		outputErrorMsg(w, http.StatusInternalServerError, "db error")
+		tx.Rollback()
+		buyingMutexMap.SetFailure(itemID)
+		return
+	}
+
+	_, err = tx.Exec("UPDATE `items` SET `buyer_id` = ?, `status` = ?, `updated_at` = ? WHERE `id` = ?",
+		buyer.ID,
+		ItemStatusTrading,
+		time.Now(),
+		item.ID,
+	)
+	if err != nil {
+		log.Print(err)
+
+		outputErrorMsg(w, http.StatusInternalServerError, "db error")
+		tx.Rollback()
+		buyingMutexMap.SetFailure(itemID)
+		return
+	}
+
+	// TODO: 並列
 	var scr *APIShipmentCreateRes
 	var pstr *APIPaymentServiceTokenRes
 
@@ -1719,10 +1725,8 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 		pstr *APIPaymentServiceTokenRes
 		err  error
 	}
-	dbrChan := make(chan TxrStruct)
 	scrChan := make(chan ScrStruct)
 	pstrChan := make(chan PstrStruct)
-	go txBuy(tx, item, buyer, category, dbrChan)
 	go func() {
 		scr, err := APIShipmentCreate(shipmentServiceURL, &APIShipmentCreateReq{
 			ToAddress:   buyer.Address,
@@ -1750,18 +1754,8 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 		pstrChan <- str
 	}()
 
-	for i := 0; i < 3; i++ {
+	for i := 0; i < 2; i++ {
 		select {
-		case str := <-dbrChan:
-			transactionEvidenceID = str.teID
-			err = str.err
-			if err != nil {
-				log.Print(err)
-				outputErrorMsg(w, http.StatusInternalServerError, "db error")
-				tx.Rollback()
-				buyingMutexMap.SetFailure(itemID)
-				return
-			}
 		case str := <-scrChan:
 			scr = str.scr
 			err = str.err
