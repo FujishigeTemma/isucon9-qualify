@@ -447,10 +447,10 @@ func getUserSimplesByIDs(q sqlx.Queryer, userIDs []int64) (userSimpleMap map[int
 
 	usersCacheMutex.RLock()
 
-	for _, uID := range userIDs {
-		u, ok := usersCache[uID]
+	for i := range userIDs {
+		u, ok := usersCache[userIDs[i]]
 		if ok {
-			userSimpleMap[uID] = &UserSimple{
+			userSimpleMap[userIDs[i]] = &UserSimple{
 				ID:           u.ID,
 				AccountName:  u.AccountName,
 				NumSellItems: u.NumSellItems,
@@ -615,8 +615,8 @@ func getNewItems(w http.ResponseWriter, r *http.Request) {
 
 	itemSimples := make([]*ItemSimple, len(items))
 	sellerIds := make([]int64, len(items))
-	for i, item := range items {
-		sellerIds[i] = item.SellerID
+	for i := range items {
+		sellerIds[i] = items[i].SellerID
 	}
 	sellerSimpleMap, err := getUserSimplesByIDs(dbx, sellerIds)
 	if err != nil {
@@ -624,29 +624,29 @@ func getNewItems(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	for i, item := range items {
-		seller := sellerSimpleMap[item.SellerID]
+	for i := range items {
+		seller := sellerSimpleMap[items[i].SellerID]
 		//seller, err := getUserSimpleByID(dbx, item.SellerID)
 		//if err != nil {
 		//	outputErrorMsg(w, http.StatusNotFound, "seller not found")
 		//	return
 		//}
-		category, err := getCategoryByID(item.CategoryID)
+		category, err := getCategoryByID(items[i].CategoryID)
 		if err != nil {
 			outputErrorMsg(w, http.StatusNotFound, "category not found")
 			return
 		}
 		itemSimples[i] = &ItemSimple{
-			ID:         item.ID,
-			SellerID:   item.SellerID,
+			ID:         items[i].ID,
+			SellerID:   items[i].SellerID,
 			Seller:     seller,
-			Status:     item.Status,
-			Name:       item.Name,
-			Price:      item.Price,
-			ImageURL:   getImageURL(item.ImageName),
-			CategoryID: item.CategoryID,
+			Status:     items[i].Status,
+			Name:       items[i].Name,
+			Price:      items[i].Price,
+			ImageURL:   getImageURL(items[i].ImageName),
+			CategoryID: items[i].CategoryID,
 			Category:   &category,
-			CreatedAt:  item.CreatedAt.Unix(),
+			CreatedAt:  items[i].CreatedAt.Unix(),
 		}
 	}
 
@@ -748,9 +748,9 @@ func getNewCategoryItems(w http.ResponseWriter, r *http.Request) {
 	}
 
 	itemSimples := make([]*ItemSimple, len(items))
-	sellerIds := make([]int64, 0, len(items))
-	for _, item := range items {
-		sellerIds = append(sellerIds, item.SellerID)
+	sellerIds := make([]int64, len(items))
+	for i := range items {
+		sellerIds[i] = items[i].SellerID
 	}
 	sellerSimpleMap, err := getUserSimplesByIDs(dbx, sellerIds)
 	if err != nil {
@@ -758,29 +758,29 @@ func getNewCategoryItems(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	for i, item := range items {
-		seller := sellerSimpleMap[item.SellerID]
+	for i := range items {
+		seller := sellerSimpleMap[items[i].SellerID]
 		//seller, err := getUserSimpleByID(dbx, item.SellerID)
 		//if err != nil {
 		//	outputErrorMsg(w, http.StatusNotFound, "seller not found")
 		//	return
 		//}
-		category, err := getCategoryByID(item.CategoryID)
+		category, err := getCategoryByID(items[i].CategoryID)
 		if err != nil {
 			outputErrorMsg(w, http.StatusNotFound, "category not found")
 			return
 		}
 		itemSimples[i] = &ItemSimple{
-			ID:         item.ID,
-			SellerID:   item.SellerID,
+			ID:         items[i].ID,
+			SellerID:   items[i].SellerID,
 			Seller:     seller,
-			Status:     item.Status,
-			Name:       item.Name,
-			Price:      item.Price,
-			ImageURL:   getImageURL(item.ImageName),
-			CategoryID: item.CategoryID,
+			Status:     items[i].Status,
+			Name:       items[i].Name,
+			Price:      items[i].Price,
+			ImageURL:   getImageURL(items[i].ImageName),
+			CategoryID: items[i].CategoryID,
 			Category:   &category,
-			CreatedAt:  item.CreatedAt.Unix(),
+			CreatedAt:  items[i].CreatedAt.Unix(),
 		}
 	}
 
@@ -881,23 +881,23 @@ func getUserItems(w http.ResponseWriter, r *http.Request) {
 	}
 
 	itemSimples := make([]*ItemSimple, len(items))
-	for i, item := range items {
-		category, err := getCategoryByID(item.CategoryID)
+	for i := range items {
+		category, err := getCategoryByID(items[i].CategoryID)
 		if err != nil {
 			outputErrorMsg(w, http.StatusNotFound, "category not found")
 			return
 		}
 		itemSimples[i] = &ItemSimple{
-			ID:         item.ID,
-			SellerID:   item.SellerID,
+			ID:         items[i].ID,
+			SellerID:   items[i].SellerID,
 			Seller:     &userSimple,
-			Status:     item.Status,
-			Name:       item.Name,
-			Price:      item.Price,
-			ImageURL:   getImageURL(item.ImageName),
-			CategoryID: item.CategoryID,
+			Status:     items[i].Status,
+			Name:       items[i].Name,
+			Price:      items[i].Price,
+			ImageURL:   getImageURL(items[i].ImageName),
+			CategoryID: items[i].CategoryID,
 			Category:   &category,
-			CreatedAt:  item.CreatedAt.Unix(),
+			CreatedAt:  items[i].CreatedAt.Unix(),
 		}
 	}
 
@@ -1019,8 +1019,8 @@ func getShippingStatuses(tx *sqlx.Tx, w http.ResponseWriter, transactionEvidence
 	}
 
 	ssMap = make(map[int64]string, len(shippings))
-	for _, s := range shippings {
-		ssMap[s.TransactionEvidenceID] = s.Status
+	for i := range shippings {
+		ssMap[shippings[i].TransactionEvidenceID] = shippings[i].Status
 	}
 
 	/*
@@ -1078,8 +1078,8 @@ func getTransactionAdditions(tx *sqlx.Tx, w http.ResponseWriter, itemIDs []int64
 	}
 
 	ids := make([]int64, 0, len(tas))
-	for _, ta := range tas {
-		ids = append(ids, ta.TransactionEvidenceID)
+	for i := range tas {
+		ids = append(ids, tas[i].TransactionEvidenceID)
 	}
 	// It's able to ignore ErrNoRows
 	if len(ids) <= 0 {
@@ -1091,9 +1091,9 @@ func getTransactionAdditions(tx *sqlx.Tx, w http.ResponseWriter, itemIDs []int64
 	}
 
 	iMap = make(map[int64]TransactionAdditions, len(tas))
-	for _, ta := range tas {
-		ta.ShippingStatus = shippingStatusMap[ta.TransactionEvidenceID]
-		iMap[ta.ItemID] = ta
+	for i := range tas {
+		tas[i].ShippingStatus = shippingStatusMap[tas[i].TransactionEvidenceID]
+		iMap[tas[i].ItemID] = tas[i]
 	}
 	return iMap, false
 }
@@ -1163,11 +1163,11 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	userIds := make([]int64, 0, len(items)*2)
-	itemIds := make([]int64, 0, len(items))
-	for _, item := range items {
-		userIds = append(userIds, item.SellerID)
-		userIds = append(userIds, item.BuyerID)
-		itemIds = append(itemIds, item.ID)
+	itemIds := make([]int64, len(items))
+	for i := range items {
+		userIds = append(userIds, items[i].SellerID)
+		userIds = append(userIds, items[i].BuyerID)
+		itemIds[i] = items[i].ID
 	}
 
 	userSimpleMap, err := getUserSimplesByIDs(tx, userIds)
@@ -1183,9 +1183,9 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	itemDetails := make([]*ItemDetail, len(items))
-	for i, item := range items {
-		seller := userSimpleMap[item.SellerID]
-		category, err := getCategoryByID(item.CategoryID)
+	for i := range items {
+		seller := userSimpleMap[items[i].SellerID]
+		category, err := getCategoryByID(items[i].CategoryID)
 		if err != nil {
 			outputErrorMsg(w, http.StatusNotFound, "category not found")
 			tx.Rollback()
@@ -1193,31 +1193,31 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 		}
 
 		itemDetail := ItemDetail{
-			ID:       item.ID,
-			SellerID: item.SellerID,
+			ID:       items[i].ID,
+			SellerID: items[i].SellerID,
 			Seller:   seller,
 			// BuyerID
 			// Buyer
-			Status:      item.Status,
-			Name:        item.Name,
-			Price:       item.Price,
-			Description: item.Description,
-			ImageURL:    getImageURL(item.ImageName),
-			CategoryID:  item.CategoryID,
+			Status:      items[i].Status,
+			Name:        items[i].Name,
+			Price:       items[i].Price,
+			Description: items[i].Description,
+			ImageURL:    getImageURL(items[i].ImageName),
+			CategoryID:  items[i].CategoryID,
 			// TransactionEvidenceID
 			// TransactionEvidenceStatus
 			// ShippingStatus
 			Category:  &category,
-			CreatedAt: item.CreatedAt.Unix(),
+			CreatedAt: items[i].CreatedAt.Unix(),
 		}
 
-		if item.BuyerID != 0 {
-			buyer := userSimpleMap[item.BuyerID]
-			itemDetail.BuyerID = item.BuyerID
+		if items[i].BuyerID != 0 {
+			buyer := userSimpleMap[items[i].BuyerID]
+			itemDetail.BuyerID = items[i].BuyerID
 			itemDetail.Buyer = buyer
 		}
 
-		ta, exists := transactionAdditions[item.ID]
+		ta, exists := transactionAdditions[items[i].ID]
 		if exists && ta.TransactionEvidenceID > 0 {
 			itemDetail.TransactionEvidenceID = ta.TransactionEvidenceID
 			itemDetail.TransactionEvidenceStatus = ta.TransactionEvidenceStatus
@@ -2338,8 +2338,8 @@ func getSettings(w http.ResponseWriter, r *http.Request) {
 	ress.PaymentServiceURL = paymentServiceURL
 
 	categories := make([]Category, 0, len(categoryCache))
-	for _, category := range categoryCache {
-		categories = append(categories, category)
+	for i := range categoryCache {
+		categories = append(categories, categoryCache[i])
 	}
 	ress.Categories = categories
 
