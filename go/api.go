@@ -52,9 +52,14 @@ type APIShipmentStatusReq struct {
 }
 
 func APIPaymentToken(paymentURL string, param *APIPaymentServiceTokenReq) (*APIPaymentServiceTokenRes, error) {
-	b, _ := json.Marshal(param)
+	b := new(bytes.Buffer)
 
-	req, err := http.NewRequest(http.MethodPost, paymentURL+"/token", bytes.NewBuffer(b))
+	err := json.NewEncoder(b).Encode(param)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, paymentURL+"/token", b)
 	if err != nil {
 		return nil, err
 	}
@@ -86,9 +91,14 @@ func APIPaymentToken(paymentURL string, param *APIPaymentServiceTokenReq) (*APIP
 }
 
 func APIShipmentCreate(shipmentURL string, param *APIShipmentCreateReq) (*APIShipmentCreateRes, error) {
-	b, _ := json.Marshal(param)
+	b := new(bytes.Buffer)
 
-	req, err := http.NewRequest(http.MethodPost, shipmentURL+"/create", bytes.NewBuffer(b))
+	err := json.NewEncoder(b).Encode(param)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, shipmentURL+"/create", b)
 	if err != nil {
 		return nil, err
 	}
@@ -121,9 +131,14 @@ func APIShipmentCreate(shipmentURL string, param *APIShipmentCreateReq) (*APIShi
 }
 
 func APIShipmentRequest(shipmentURL string, param *APIShipmentRequestReq) ([]byte, error) {
-	b, _ := json.Marshal(param)
+	b := new(bytes.Buffer)
 
-	req, err := http.NewRequest(http.MethodPost, shipmentURL+"/request", bytes.NewBuffer(b))
+	err := json.NewEncoder(b).Encode(param)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, shipmentURL+"/request", b)
 	if err != nil {
 		return nil, err
 	}
@@ -150,9 +165,14 @@ func APIShipmentRequest(shipmentURL string, param *APIShipmentRequestReq) ([]byt
 }
 
 func APIShipmentStatus(shipmentURL string, param *APIShipmentStatusReq) (*APIShipmentStatusRes, error) {
-	b, _ := json.Marshal(param)
+	b := new(bytes.Buffer)
 
-	req, err := http.NewRequest(http.MethodGet, shipmentURL+"/status", bytes.NewBuffer(b))
+	err := json.NewEncoder(b).Encode(param)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, shipmentURL+"/status", b)
 	if err != nil {
 		return nil, err
 	}
