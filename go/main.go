@@ -1163,7 +1163,7 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 			itemDetail.ShippingStatus = ta.ShippingStatus
 		}
 
-		itemDetails[i] = &itemDetail
+		itemDetails[i] = itemDetail
 	}
 	tx.Commit()
 
