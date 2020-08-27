@@ -649,7 +649,6 @@ func getNewItems(w http.ResponseWriter, r *http.Request) {
 			CreatedAt:  item.CreatedAt.Unix(),
 		}
 	}
-	itemsPool.Put(items)
 
 	hasNext := false
 	if len(itemSimples) > ItemsPerPage {
@@ -664,6 +663,8 @@ func getNewItems(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json;charset=utf-8")
 	json.NewEncoder(w).Encode(rni)
+
+	itemsPool.Put(items)
 }
 
 func getNewCategoryItems(w http.ResponseWriter, r *http.Request) {
@@ -782,8 +783,6 @@ func getNewCategoryItems(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	itemsPool.Put(items)
-
 	hasNext := false
 	if len(itemSimples) > ItemsPerPage {
 		hasNext = true
@@ -800,6 +799,7 @@ func getNewCategoryItems(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json;charset=utf-8")
 	json.NewEncoder(w).Encode(rni)
 
+	itemsPool.Put(items)
 }
 
 func getUserItems(w http.ResponseWriter, r *http.Request) {
@@ -899,8 +899,6 @@ func getUserItems(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	itemsPool.Put(items)
-
 	hasNext := false
 	if len(itemSimples) > ItemsPerPage {
 		hasNext = true
@@ -915,6 +913,8 @@ func getUserItems(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json;charset=utf-8")
 	json.NewEncoder(w).Encode(rui)
+
+	itemsPool.Put(items)
 }
 
 type TransactionAdditions struct {
@@ -1225,8 +1225,6 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 	}
 	tx.Commit()
 
-	itemsTPool.Put(items)
-
 	hasNext := false
 	if len(itemDetails) > TransactionsPerPage {
 		hasNext = true
@@ -1241,6 +1239,7 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json;charset=utf-8")
 	json.NewEncoder(w).Encode(rts)
 
+	itemsTPool.Put(items)
 }
 
 type ItemEPool struct {
