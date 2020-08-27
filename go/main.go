@@ -1559,6 +1559,8 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 		buyingMutexMap.Add(itemID, c)
 	}
 
+	start := time.Now()
+
 	tx := dbx.MustBegin()
 
 	item := Item{}
@@ -1618,6 +1620,9 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	endGet := time.Now()
+	log.Printf("%d EndGet %d", item.ID, endGet.Sub(start).Milliseconds())
+
 	result, err := tx.Exec("INSERT INTO `transaction_evidences` (`seller_id`, `buyer_id`, `status`, `item_id`, `item_name`, `item_price`, `item_description`,`item_category_id`,`item_root_category_id`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
 		item.SellerID,
 		buyer.ID,
@@ -1648,6 +1653,9 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	endInsert := time.Now()
+	log.Printf("%d EndInsert %d", item.ID, endInsert.Sub(start).Milliseconds())
+
 	_, err = tx.Exec("UPDATE `items` SET `buyer_id` = ?, `status` = ?, `updated_at` = ? WHERE `id` = ?",
 		buyer.ID,
 		ItemStatusTrading,
@@ -1662,6 +1670,9 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 		buyingMutexMap.SetFailure(itemID)
 		return
 	}
+
+	endUpdate := time.Now()
+	log.Printf("%d EndUpdate %d", item.ID, endUpdate.Sub(start).Milliseconds())
 
 	// TODO: 並列
 	var scr *APIShipmentCreateRes
@@ -1751,6 +1762,9 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	endAPI := time.Now()
+	log.Printf("%d EndAPI %d", item.ID, endAPI.Sub(start).Milliseconds())
+
 	_, err = tx.Exec("INSERT INTO `shippings` (`transaction_evidence_id`, `status`, `item_name`, `item_id`, `reserve_id`, `reserve_time`, `to_address`, `to_name`, `from_address`, `from_name`, `img_binary`) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
 		transactionEvidenceID,
 		ShippingsStatusInitial,
@@ -1775,6 +1789,9 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 
 	tx.Commit()
 	buyingMutexMap.SetSuccess(itemID)
+
+	endInsert2 := time.Now()
+	log.Printf("%d EndInsert2 %d", item.ID, endInsert2.Sub(start).Milliseconds())
 
 	w.Header().Set("Content-Type", "application/json;charset=utf-8")
 	json.NewEncoder(w).Encode(resBuy{TransactionEvidenceID: transactionEvidenceID})
