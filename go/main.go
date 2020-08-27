@@ -24,6 +24,8 @@ import (
 	goji "goji.io"
 	"goji.io/pat"
 	"golang.org/x/crypto/bcrypt"
+	"golang.org/x/net/http2"
+	"golang.org/x/net/http2/h2c"
 )
 
 var json = jsoniter.Config{
@@ -386,7 +388,9 @@ func main() {
 	mux.HandleFunc(pat.Get("/reports.json"), getReports)
 	mux.Use(coala)
 
-	log.Fatal(http.ListenAndServe(":8000", mux))
+	s := &http2.Server{}
+	muxh2c := h2c.NewHandler(mux, s)
+	log.Fatal(http.ListenAndServe(":8000", muxh2c))
 }
 
 func getCSRFToken(r *http.Request) string {
@@ -2111,7 +2115,7 @@ func postSell(w http.ResponseWriter, r *http.Request) {
 	}
 
 	imgName := secureRandomStr(16) + ext
-	err = ioutil.WriteFile("../public/upload/" + imgName, img, 0644)
+	err = ioutil.WriteFile("../public/upload/"+imgName, img, 0644)
 	if err != nil {
 		log.Print(err)
 		outputErrorMsg(w, http.StatusInternalServerError, "Saving image failed")
