@@ -502,7 +502,7 @@ func postInitialize(w http.ResponseWriter, r *http.Request) {
 		}
 		_, ok := childCategoriesCache[c.ParentID]
 		if !ok {
-			childCategoriesCache[c.ParentID] = make([]int, 0)
+			childCategoriesCache[c.ParentID] = []int{}
 		}
 		cIDs := childCategoriesCache[c.ParentID]
 		childCategoriesCache[c.ParentID] = append(cIDs, c.ID)
@@ -559,7 +559,7 @@ func getNewItems(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	items := []Item{}
+	items := make([]Item, 0, ItemsPerPage+1)
 	if itemID > 0 && createdAt > 0 {
 		// paging
 		err := dbx.Select(&items,
@@ -711,7 +711,7 @@ func getNewCategoryItems(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	items := []Item{}
+	items := make([]Item, 0, ItemsPerPage+1)
 	err = dbx.Select(&items, inQuery, inArgs...)
 
 	if err != nil {
@@ -821,7 +821,7 @@ func getUserItems(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	items := []Item{}
+	items := make([]Item, 0, ItemsPerPage+1)
 	if itemID > 0 && createdAt > 0 {
 		// paging
 		err := dbx.Select(&items,
@@ -972,7 +972,7 @@ func getShippingStatuses(tx *sqlx.Tx, w http.ResponseWriter, transactionEvidence
 	}
 	query = dbx.Rebind(query)
 
-	shippings := []Shipping{}
+	shippings := make([]Shipping, 0, len(transactionEvidenceIDs))
 	err = sqlx.Select(tx, &shippings, query, args...)
 	if err == sql.ErrNoRows {
 		outputErrorMsg(w, http.StatusNotFound, "shipping not found")
@@ -1036,7 +1036,7 @@ func getTransactionAdditions(tx *sqlx.Tx, w http.ResponseWriter, itemIDs []int64
 	}
 	query = dbx.Rebind(query)
 
-	tas := []TransactionAdditions{}
+	tas := make([]TransactionAdditions, 0, len(itemIDs))
 	err = sqlx.Select(tx, &tas, query, args...)
 	if err != nil {
 		log.Print(err)
@@ -1096,7 +1096,7 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	tx := dbx.MustBegin()
-	items := []Item{}
+	items := make([]Item, 0, TransactionsPerPage+1)
 	if itemID > 0 && createdAt > 0 {
 		// paging
 		err := tx.Select(&items,
