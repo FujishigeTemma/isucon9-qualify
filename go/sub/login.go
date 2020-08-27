@@ -72,8 +72,8 @@ func main() {
 	quit := make(chan os.Signal)
 	signal.Notify(quit, os.Interrupt)
 	log.Print("waiting signal")
-	sig := <-quit
-	log.Print(sig)
+	<-quit
+	log.Print("SIGINT")
 	//flushCacheToFile()
 }
 
@@ -109,19 +109,6 @@ func auth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	u := User{}
-	err = dbx.Get(&u, "SELECT * FROM `users` WHERE `account_name` = ?", accountName)
-	if err == sql.ErrNoRows {
-		outputErrorMsg(w, http.StatusUnauthorized, "アカウント名かパスワードが間違えています")
-		return
-	}
-	if err != nil {
-		log.Print(err)
-
-		outputErrorMsg(w, http.StatusInternalServerError, "db error")
-		return
-	}
-
 	if cachedPass, ok := cache.Load(accountName); ok {
 		isSame := subtle.ConstantTimeCompare([]byte(cachedPass), []byte(password)) == 1
 		if !isSame {
@@ -140,7 +127,21 @@ func auth(w http.ResponseWriter, r *http.Request) {
 			outputErrorMsg(w, http.StatusInternalServerError, "crypt error")
 			return
 		}
+
+		cache.Store(accountName, password)
 	} else {
+		u := User{}
+		err = dbx.Get(&u, "SELECT * FROM `users` WHERE `account_name` = ?", accountName)
+		if err == sql.ErrNoRows {
+			outputErrorMsg(w, http.StatusUnauthorized, "アカウント名かパスワードが間違えています")
+			return
+		}
+		if err != nil {
+			log.Print(err)
+			outputErrorMsg(w, http.StatusInternalServerError, "db error")
+			return
+		}
+
 		err = bcrypt.CompareHashAndPassword(u.HashedPassword, []byte(password))
 		if err == bcrypt.ErrMismatchedHashAndPassword {
 			outputErrorMsg(w, http.StatusUnauthorized, "アカウント名かパスワードが間違えています")
@@ -184,21 +185,21 @@ func pollDB(dbx *sqlx.DB) {
 
 func loadFileCache() {
 	//if _, err := os.Stat("passwords.json"); os.IsNotExist(err) {
-	//	log.Print("json file does not exist.")
-	//	return
+	//      log.Print("json file does not exist.")
+	//      return
 	//}
 	//raw, err := ioutil.ReadFile("passwords.json")
 	//if err != nil {
-	//	log.Fatal(err)
+	//      log.Fatal(err)
 	//}
 	//
 	//defaultUserMap := make(map[string]interface{})
 	//err = json.Unmarshal(raw, &defaultUserMap)
 	//if err != nil {
-	//	log.Fatal(err)
+	//      log.Fatal(err)
 	//}
 	//for k, v := range defaultUserMap {
-	//	cache.Store(k, v.(string))
+	//      cache.Store(k, v.(string))
 	//}
 
 	if _, err := os.Stat("hashedPasswords.json"); os.IsNotExist(err) {
