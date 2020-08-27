@@ -90,6 +90,16 @@ func readUserFromCache(userID int64) (User, bool) {
 	usersCacheMutex.RUnlock()
 	return user, ok
 }
+func readUserFromCacheByAccountName(accountName string) (User, bool) {
+	usersCacheMutex.RLock()
+	for i := range usersCache {
+		if usersCache[i].AccountName == accountName {
+			return usersCache[i], true
+		}
+	}
+	usersCacheMutex.RUnlock()
+	return User{}, false
+}
 
 type User struct {
 	ID             int64     `json:"id" db:"id"`
@@ -2294,13 +2304,19 @@ func getSettings(w http.ResponseWriter, r *http.Request) {
 }
 
 func postLogin(w http.ResponseWriter, r *http.Request) {
-	user, statusCode := APIAuthCheck(&r.Body)
+	res, statusCode := APIAuthCheck(&r.Body)
 	if statusCode == http.StatusUnauthorized {
 		outputErrorMsg(w, http.StatusUnauthorized, "アカウント名かパスワードが間違えています")
 		return
 	}
 	if statusCode != http.StatusOK {
 		outputErrorMsg(w, http.StatusInternalServerError, "internal request failed")
+		return
+	}
+
+	user, ok := readUserFromCacheByAccountName(res.AccountName)
+	if !ok {
+		outputErrorMsg(w, http.StatusInternalServerError, "user not found by account_name")
 		return
 	}
 
@@ -2344,6 +2360,7 @@ func postLogin(w http.ResponseWriter, r *http.Request) {
 	//	outputErrorMsg(w, http.StatusInternalServerError, "crypt error")
 	//	return
 	//}
+
 
 	setSession(w, SessionData{
 		UserID:    user.ID,

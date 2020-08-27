@@ -204,7 +204,11 @@ func APIShipmentStatus(shipmentURL string, param *APIShipmentStatusReq) (*APIShi
 	return ssr, nil
 }
 
-func APIAuthCheck(body *io.ReadCloser) (*User, int) {
+type LoginRes struct {
+	AccountName string `json:"account_name"`
+}
+
+func APIAuthCheck(body *io.ReadCloser) (*LoginRes, int) {
 	//req, err := http.NewRequest(http.MethodPost, authURL+"/auth", *body)
 	//if err != nil {
 	//	log.Print(err)
@@ -221,15 +225,15 @@ func APIAuthCheck(body *io.ReadCloser) (*User, int) {
 	if err != nil {
 		log.Print(err)
 		fmt.Println(err)
-		return &User{}, http.StatusInternalServerError
+		return &LoginRes{}, http.StatusInternalServerError
 	}
 	defer res.Body.Close()
 
-	u := User{}
-	if err = json.NewDecoder(res.Body).Decode(&u); err != nil {
+	res := LoginRes{}
+	if err = json.NewDecoder(res.Body).Decode(&res); err != nil {
 		log.Print(err)
 
-		return &User{}, http.StatusInternalServerError
+		return &LoginRes{}, http.StatusInternalServerError
 	}
-	return &u, res.StatusCode
+	return &res, res.StatusCode
 }
