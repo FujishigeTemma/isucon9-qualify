@@ -21,9 +21,9 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"
 	jsoniter "github.com/json-iterator/go"
-	goji "goji.io"
-	"goji.io/pat"
+	"github.com/labstack/echo/v4"
 	"golang.org/x/crypto/bcrypt"
+	//"golang.org/x/net/http2"
 )
 
 var json = jsoniter.Config{
@@ -361,32 +361,35 @@ func main() {
 	http.DefaultTransport.(*http.Transport).ForceAttemptHTTP2 = true
 	http.DefaultClient.Timeout = 5 * time.Second
 
-	mux := goji.NewMux()
-
 	coala := coalaRoute("GET")
 
-	// API
-	mux.HandleFunc(pat.Post("/initialize"), postInitialize)
-	mux.HandleFunc(pat.Get("/new_items.json"), getNewItems)
-	mux.HandleFunc(pat.Get("/new_items/:root_category_id.json"), getNewCategoryItems)
-	mux.HandleFunc(pat.Get("/users/transactions.json"), getTransactions)
-	mux.HandleFunc(pat.Get("/users/:user_id.json"), getUserItems)
-	mux.HandleFunc(pat.Get("/items/:item_id.json"), getItem)
-	mux.HandleFunc(pat.Post("/items/edit"), postItemEdit)
-	mux.HandleFunc(pat.Post("/buy"), postBuy)
-	mux.HandleFunc(pat.Post("/sell"), postSell)
-	mux.HandleFunc(pat.Post("/ship"), postShip)
-	mux.HandleFunc(pat.Post("/ship_done"), postShipDone)
-	mux.HandleFunc(pat.Post("/complete"), postComplete)
-	mux.HandleFunc(pat.Get("/transactions/:transaction_evidence_id.png"), getQRCode)
-	mux.HandleFunc(pat.Post("/bump"), postBump)
-	mux.HandleFunc(pat.Get("/settings"), getSettings)
-	mux.HandleFunc(pat.Post("/login"), postLogin)
-	mux.HandleFunc(pat.Post("/register"), postRegister)
-	mux.HandleFunc(pat.Get("/reports.json"), getReports)
-	mux.Use(coala)
+	e := echo.New()
 
-	log.Fatal(http.ListenAndServe(":8000", mux))
+	e.Use(coala)
+
+	// API
+	e.POST("/initialize", postInitialize)
+	e.GET("/new_items.json", getNewItems)
+	e.GET("/new_items/:root_category_id.json", getNewCategoryItems)
+	e.GET("/users/transactions.json", getTransactions)
+	e.GET("/users/:user_id.json", getUserItems)
+	e.GET("/items/:item_id.json", getItem)
+	e.POST("/items/edit", postItemEdit)
+	e.POST("/buy", postBuy)
+	e.POST("/sell", postSell)
+	e.POST("/ship", postShip)
+	e.POST("/ship_done", postShipDone)
+	e.POST("/complete", postComplete)
+	e.GET("/transactions/:transaction_evidence_id.png", getQRCode)
+	e.POST("/bump", postBump)
+	e.GET("/settings", getSettings)
+	e.POST("/login", postLogin)
+	e.POST("/register", postRegister)
+	e.GET("/reports.json", getReports)
+
+	//s := &http2.Server{}
+	//e.Logger.Fatal(e.StartH2CServer(":8000", s))
+	e.Logger.Fatal(e.Start(":8000"))
 }
 
 func getCSRFToken(r *http.Request) string {
@@ -440,13 +443,16 @@ func getCategoryByID(categoryID int) (category Category, err error) {
 	return category, err
 }
 
-func postInitialize(w http.ResponseWriter, r *http.Request) {
+func postInitialize(c echo.Context) error {
+	r := c.Request()
+	w := c.Response().Writer
+
 	ri := reqInitialize{}
 
 	err := json.NewDecoder(r.Body).Decode(&ri)
 	if err != nil {
 		outputErrorMsg(w, http.StatusBadRequest, "json decode error")
-		return
+		return nil
 	}
 
 	cmd := exec.Command("../sql/init.sh")
@@ -455,7 +461,7 @@ func postInitialize(w http.ResponseWriter, r *http.Request) {
 	cmd.Run()
 	if err != nil {
 		outputErrorMsg(w, http.StatusInternalServerError, "exec init.sh error")
-		return
+		return nil
 	}
 
 	// キャッシュのリセット
@@ -476,7 +482,7 @@ func postInitialize(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Print(err)
 		outputErrorMsg(w, http.StatusInternalServerError, "category mem cache error")
-		return
+		return nil
 	}
 	categoryCache = make(map[int]Category, len(categories))
 	for _, c := range categories {
@@ -507,7 +513,7 @@ func postInitialize(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Print(err)
 		outputErrorMsg(w, http.StatusInternalServerError, "user mem cache error")
-		return
+		return nil
 	}
 	usersCache = make(map[int64]User, len(users))
 	for _, u := range users {
@@ -527,9 +533,13 @@ func postInitialize(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json;charset=utf-8")
 	json.NewEncoder(w).Encode(res)
+	return nil
 }
 
-func getNewItems(w http.ResponseWriter, r *http.Request) {
+func getNewItems(c echo.Context) error {
+	r := c.Request()
+	w := c.Response().Writer
+
 	query := r.URL.Query()
 	itemIDStr := query.Get("item_id")
 	var itemID int64
@@ -538,7 +548,7 @@ func getNewItems(w http.ResponseWriter, r *http.Request) {
 		itemID, err = strconv.ParseInt(itemIDStr, 10, 64)
 		if err != nil || itemID <= 0 {
 			outputErrorMsg(w, http.StatusBadRequest, "item_id param error")
-			return
+			return nil
 		}
 	}
 
@@ -548,7 +558,7 @@ func getNewItems(w http.ResponseWriter, r *http.Request) {
 		createdAt, err = strconv.ParseInt(createdAtStr, 10, 64)
 		if err != nil || createdAt <= 0 {
 			outputErrorMsg(w, http.StatusBadRequest, "created_at param error")
-			return
+			return nil
 		}
 	}
 
@@ -566,7 +576,7 @@ func getNewItems(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			log.Print(err)
 			outputErrorMsg(w, http.StatusInternalServerError, "db error")
-			return
+			return nil
 		}
 	} else {
 		// 1st page
@@ -578,26 +588,26 @@ func getNewItems(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			log.Print(err)
 			outputErrorMsg(w, http.StatusInternalServerError, "db error")
-			return
+			return nil
 		}
 	}
 
 	itemSimples := make([]ItemSimple, len(items))
 	if err != nil {
 		outputErrorMsg(w, http.StatusNotFound, "seller not found")
-		return
+		return nil
 	}
 
 	for i := range items {
 		seller, err := getUserSimpleByID(items[i].SellerID)
 		if err != nil {
 			outputErrorMsg(w, http.StatusNotFound, "seller not found")
-			return
+			return nil
 		}
 		category, err := getCategoryByID(items[i].CategoryID)
 		if err != nil {
 			outputErrorMsg(w, http.StatusNotFound, "category not found")
-			return
+			return nil
 		}
 		itemSimples[i] = ItemSimple{
 			ID:         items[i].ID,
@@ -628,21 +638,24 @@ func getNewItems(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json;charset=utf-8")
 	json.NewEncoder(w).Encode(rni)
-
+	return nil
 }
 
-func getNewCategoryItems(w http.ResponseWriter, r *http.Request) {
-	rootCategoryIDStr := pat.Param(r, "root_category_id")
+func getNewCategoryItems(c echo.Context) error {
+	r := c.Request()
+	w := c.Response().Writer
+
+	rootCategoryIDStr := c.Param("root_category_id")
 	rootCategoryID, err := strconv.Atoi(rootCategoryIDStr)
 	if err != nil || rootCategoryID <= 0 {
 		outputErrorMsg(w, http.StatusBadRequest, "incorrect category id")
-		return
+		return nil
 	}
 
 	rootCategory, err := getCategoryByID(rootCategoryID)
 	if err != nil || rootCategory.ParentID != 0 {
 		outputErrorMsg(w, http.StatusNotFound, "category not found")
-		return
+		return nil
 	}
 
 	query := r.URL.Query()
@@ -652,7 +665,7 @@ func getNewCategoryItems(w http.ResponseWriter, r *http.Request) {
 		itemID, err = strconv.ParseInt(itemIDStr, 10, 64)
 		if err != nil || itemID <= 0 {
 			outputErrorMsg(w, http.StatusBadRequest, "item_id param error")
-			return
+			return nil
 		}
 	}
 
@@ -662,7 +675,7 @@ func getNewCategoryItems(w http.ResponseWriter, r *http.Request) {
 		createdAt, err = strconv.ParseInt(createdAtStr, 10, 64)
 		if err != nil || createdAt <= 0 {
 			outputErrorMsg(w, http.StatusBadRequest, "created_at param error")
-			return
+			return nil
 		}
 	}
 
@@ -681,7 +694,7 @@ func getNewCategoryItems(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			log.Print(err)
 			outputErrorMsg(w, http.StatusInternalServerError, "db error")
-			return
+			return nil
 		}
 	} else {
 		// 1st page
@@ -694,7 +707,7 @@ func getNewCategoryItems(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			log.Print(err)
 			outputErrorMsg(w, http.StatusInternalServerError, "db error")
-			return
+			return nil
 		}
 	}
 
@@ -704,12 +717,12 @@ func getNewCategoryItems(w http.ResponseWriter, r *http.Request) {
 		seller, err := getUserSimpleByID(items[i].SellerID)
 		if err != nil {
 			outputErrorMsg(w, http.StatusNotFound, "seller not found")
-			return
+			return nil
 		}
 		category, err := getCategoryByID(items[i].CategoryID)
 		if err != nil {
 			outputErrorMsg(w, http.StatusNotFound, "category not found")
-			return
+			return nil
 		}
 		itemSimples[i] = ItemSimple{
 			ID:         items[i].ID,
@@ -742,21 +755,24 @@ func getNewCategoryItems(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json;charset=utf-8")
 	json.NewEncoder(w).Encode(rni)
-
+	return nil
 }
 
-func getUserItems(w http.ResponseWriter, r *http.Request) {
-	userIDStr := pat.Param(r, "user_id")
+func getUserItems(c echo.Context) error {
+	r := c.Request()
+	w := c.Response().Writer
+
+	userIDStr := c.Param("user_id")
 	userID, err := strconv.ParseInt(userIDStr, 10, 64)
 	if err != nil || userID <= 0 {
 		outputErrorMsg(w, http.StatusBadRequest, "incorrect user id")
-		return
+		return nil
 	}
 
 	userSimple, err := getUserSimpleByID(userID)
 	if err != nil {
 		outputErrorMsg(w, http.StatusNotFound, "user not found")
-		return
+		return nil
 	}
 
 	query := r.URL.Query()
@@ -766,7 +782,7 @@ func getUserItems(w http.ResponseWriter, r *http.Request) {
 		itemID, err = strconv.ParseInt(itemIDStr, 10, 64)
 		if err != nil || itemID <= 0 {
 			outputErrorMsg(w, http.StatusBadRequest, "item_id param error")
-			return
+			return nil
 		}
 	}
 
@@ -776,7 +792,7 @@ func getUserItems(w http.ResponseWriter, r *http.Request) {
 		createdAt, err = strconv.ParseInt(createdAtStr, 10, 64)
 		if err != nil || createdAt <= 0 {
 			outputErrorMsg(w, http.StatusBadRequest, "created_at param error")
-			return
+			return nil
 		}
 	}
 
@@ -788,7 +804,7 @@ func getUserItems(w http.ResponseWriter, r *http.Request) {
 		}
 		w.Header().Set("Content-Type", "application/json;charset=utf-8")
 		json.NewEncoder(w).Encode(rui)
-		return
+		return nil
 	}
 
 	items := itemsPool.Get()
@@ -805,7 +821,7 @@ func getUserItems(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			log.Print(err)
 			outputErrorMsg(w, http.StatusInternalServerError, "db error")
-			return
+			return nil
 		}
 	} else {
 		// 1st page
@@ -817,7 +833,7 @@ func getUserItems(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			log.Print(err)
 			outputErrorMsg(w, http.StatusInternalServerError, "db error")
-			return
+			return nil
 		}
 	}
 
@@ -826,7 +842,7 @@ func getUserItems(w http.ResponseWriter, r *http.Request) {
 		category, err := getCategoryByID(items[i].CategoryID)
 		if err != nil {
 			outputErrorMsg(w, http.StatusNotFound, "category not found")
-			return
+			return nil
 		}
 		itemSimples[i] = ItemSimple{
 			ID:         items[i].ID,
@@ -858,7 +874,7 @@ func getUserItems(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json;charset=utf-8")
 	json.NewEncoder(w).Encode(rui)
-
+	return nil
 }
 
 type TransactionAdditions struct {
@@ -1039,11 +1055,14 @@ func getTransactionAdditions(tx *sqlx.Tx, w http.ResponseWriter, itemIDs []int64
 	return iMap, false
 }
 
-func getTransactions(w http.ResponseWriter, r *http.Request) {
+func getTransactions(c echo.Context) error {
+	r := c.Request()
+	w := c.Response().Writer
+
 	userId, errCode, errMsg := getUserID(r)
 	if errMsg != "" {
 		outputErrorMsg(w, errCode, errMsg)
-		return
+		return nil
 	}
 
 	query := r.URL.Query()
@@ -1054,7 +1073,7 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 		itemID, err = strconv.ParseInt(itemIDStr, 10, 64)
 		if err != nil || itemID <= 0 {
 			outputErrorMsg(w, http.StatusBadRequest, "item_id param error")
-			return
+			return nil
 		}
 	}
 
@@ -1064,7 +1083,7 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 		createdAt, err = strconv.ParseInt(createdAtStr, 10, 64)
 		if err != nil || createdAt <= 0 {
 			outputErrorMsg(w, http.StatusBadRequest, "created_at param error")
-			return
+			return nil
 		}
 	}
 
@@ -1085,7 +1104,7 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 			log.Print(err)
 			outputErrorMsg(w, http.StatusInternalServerError, "db error")
 			tx.Rollback()
-			return
+			return nil
 		}
 	} else {
 		// 1st page
@@ -1099,7 +1118,7 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 			log.Print(err)
 			outputErrorMsg(w, http.StatusInternalServerError, "db error")
 			tx.Rollback()
-			return
+			return nil
 		}
 	}
 
@@ -1110,7 +1129,7 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 
 	transactionAdditions, hadErr := getTransactionAdditions(tx, w, itemIds)
 	if hadErr {
-		return
+		return nil
 	}
 
 	itemDetails := make([]ItemDetail, len(items))
@@ -1119,13 +1138,13 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			outputErrorMsg(w, http.StatusNotFound, "seller not found")
 			tx.Rollback()
-			return
+			return nil
 		}
 		category, err := getCategoryByID(items[i].CategoryID)
 		if err != nil {
 			outputErrorMsg(w, http.StatusNotFound, "category not found")
 			tx.Rollback()
-			return
+			return nil
 		}
 
 		itemDetail := ItemDetail{
@@ -1152,7 +1171,7 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				outputErrorMsg(w, http.StatusNotFound, "buyer not found")
 				tx.Rollback()
-				return
+				return nil
 			}
 			itemDetail.BuyerID = items[i].BuyerID
 			itemDetail.Buyer = &buyer
@@ -1184,7 +1203,7 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json;charset=utf-8")
 	json.NewEncoder(w).Encode(rts)
-
+	return nil
 }
 
 type ItemEPool struct {
@@ -1214,18 +1233,21 @@ type ItemE struct {
 	ShippingStatus            sql.NullString `db:"s_status"`
 }
 
-func getItem(w http.ResponseWriter, r *http.Request) {
-	itemIDStr := pat.Param(r, "item_id")
+func getItem(c echo.Context) error {
+	r := c.Request()
+	w := c.Response().Writer
+
+	itemIDStr := c.Param("item_id")
 	itemID, err := strconv.ParseInt(itemIDStr, 10, 64)
 	if err != nil || itemID <= 0 {
 		outputErrorMsg(w, http.StatusBadRequest, "incorrect item id")
-		return
+		return nil
 	}
 
 	userID, errCode, errMsg := getUserID(r)
 	if errMsg != "" {
 		outputErrorMsg(w, errCode, errMsg)
-		return
+		return nil
 	}
 
 	itemE := itemEPool.Get()
@@ -1233,25 +1255,25 @@ func getItem(w http.ResponseWriter, r *http.Request) {
 	err = dbx.Get(itemE, "SELECT "+rows+" FROM `items` AS `i` LEFT JOIN `transaction_evidences` AS `te` ON `te`.`item_id` = `i`.`id` LEFT JOIN `shippings` AS `s` ON `s`.`transaction_evidence_id` = `te`.`id` WHERE `i`.`id` = ?", itemID)
 	if err == sql.ErrNoRows {
 		outputErrorMsg(w, http.StatusNotFound, "item not found")
-		return
+		return nil
 	}
 	if err != nil {
 		log.Print(err)
 		outputErrorMsg(w, http.StatusInternalServerError, "db error")
-		return
+		return nil
 	}
 	item := itemE.Item
 
 	category, err := getCategoryByID(item.CategoryID)
 	if err != nil {
 		outputErrorMsg(w, http.StatusNotFound, "category not found")
-		return
+		return nil
 	}
 
 	seller, err := getUserSimpleByID(item.SellerID)
 	if err != nil {
 		outputErrorMsg(w, http.StatusNotFound, "seller not found")
-		return
+		return nil
 	}
 
 	itemDetail := ItemDetail{
@@ -1277,7 +1299,7 @@ func getItem(w http.ResponseWriter, r *http.Request) {
 		buyer, err := getUserSimpleByID(item.BuyerID)
 		if err != nil {
 			outputErrorMsg(w, http.StatusNotFound, "buyer not found")
-			return
+			return nil
 		}
 		itemDetail.BuyerID = item.BuyerID
 		itemDetail.Buyer = &buyer
@@ -1288,7 +1310,7 @@ func getItem(w http.ResponseWriter, r *http.Request) {
 			if !itemE.ShippingStatus.Valid {
 				log.Print("db error (shippingStatus is empty)")
 				outputErrorMsg(w, http.StatusInternalServerError, "db error (shippingStatus is empty)")
-				return
+				return nil
 			}
 			itemDetail.ShippingStatus = itemE.ShippingStatus.String
 		}
@@ -1298,14 +1320,18 @@ func getItem(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json;charset=utf-8")
 	json.NewEncoder(w).Encode(itemDetail)
+	return nil
 }
 
-func postItemEdit(w http.ResponseWriter, r *http.Request) {
+func postItemEdit(c echo.Context) error {
+	r := c.Request()
+	w := c.Response().Writer
+
 	rie := reqItemEdit{}
 	err := json.NewDecoder(r.Body).Decode(&rie)
 	if err != nil {
 		outputErrorMsg(w, http.StatusBadRequest, "json decode error")
-		return
+		return nil
 	}
 
 	csrfToken := rie.CSRFToken
@@ -1315,18 +1341,18 @@ func postItemEdit(w http.ResponseWriter, r *http.Request) {
 	if csrfToken != getCSRFToken(r) {
 		outputErrorMsg(w, http.StatusUnprocessableEntity, "csrf token error")
 
-		return
+		return nil
 	}
 
 	if price < ItemMinPrice || price > ItemMaxPrice {
 		outputErrorMsg(w, http.StatusBadRequest, ItemPriceErrMsg)
-		return
+		return nil
 	}
 
 	sellerID, errCode, errMsg := getUserID(r)
 	if errMsg != "" {
 		outputErrorMsg(w, errCode, errMsg)
-		return
+		return nil
 	}
 
 	tx := dbx.MustBegin()
@@ -1335,26 +1361,26 @@ func postItemEdit(w http.ResponseWriter, r *http.Request) {
 	err = tx.Get(&targetItem, "SELECT seller_id, status, created_at FROM `items` WHERE `id` = ? FOR UPDATE", itemID)
 	if err == sql.ErrNoRows {
 		outputErrorMsg(w, http.StatusNotFound, "item not found")
-		return
+		return nil
 	}
 	if err != nil {
 		log.Print(err)
 
 		outputErrorMsg(w, http.StatusInternalServerError, "db error")
 		tx.Rollback()
-		return
+		return nil
 	}
 
 	if targetItem.SellerID != sellerID {
 		outputErrorMsg(w, http.StatusForbidden, "自分の商品以外は編集できません")
 		tx.Rollback()
-		return
+		return nil
 	}
 
 	if targetItem.Status != ItemStatusOnSale {
 		outputErrorMsg(w, http.StatusForbidden, "販売中の商品以外編集できません")
 		tx.Rollback()
-		return
+		return nil
 	}
 
 	now := time.Now()
@@ -1368,7 +1394,7 @@ func postItemEdit(w http.ResponseWriter, r *http.Request) {
 
 		outputErrorMsg(w, http.StatusInternalServerError, "db error")
 		tx.Rollback()
-		return
+		return nil
 	}
 
 	tx.Commit()
@@ -1380,6 +1406,7 @@ func postItemEdit(w http.ResponseWriter, r *http.Request) {
 		ItemCreatedAt: targetItem.CreatedAt.Unix(),
 		ItemUpdatedAt: now.Unix(),
 	})
+	return nil
 }
 
 type TEWithS struct {
@@ -1388,49 +1415,53 @@ type TEWithS struct {
 	ImgBinary []byte `db:"img_binary"`
 }
 
-func getQRCode(w http.ResponseWriter, r *http.Request) {
-	transactionEvidenceIDStr := pat.Param(r, "transaction_evidence_id")
+func getQRCode(c echo.Context) error {
+	r := c.Request()
+	w := c.Response().Writer
+
+	transactionEvidenceIDStr := c.Param("transaction_evidence_id")
 	transactionEvidenceID, err := strconv.ParseInt(transactionEvidenceIDStr, 10, 64)
 	if err != nil || transactionEvidenceID <= 0 {
 		outputErrorMsg(w, http.StatusBadRequest, "incorrect transaction_evidence id")
-		return
+		return nil
 	}
 
 	sellerID, errCode, errMsg := getUserID(r)
 	if errMsg != "" {
 		outputErrorMsg(w, errCode, errMsg)
-		return
+		return nil
 	}
 
 	teWithS := TEWithS{}
 	err = dbx.Get(&teWithS, "SELECT `te`.`seller_id` AS `seller_id`, `s`.`status` AS `status`, `s`.`img_binary` AS `img_binary` FROM `transaction_evidences` AS `te` JOIN `shippings` AS `s` ON `te`.`id` = `s`.`transaction_evidence_id` WHERE `te`.`id` = ?", transactionEvidenceID)
 	if err == sql.ErrNoRows {
 		outputErrorMsg(w, http.StatusNotFound, "transaction_evidences or shippings not found")
-		return
+		return nil
 	}
 	if err != nil {
 		log.Print(err)
 		outputErrorMsg(w, http.StatusInternalServerError, "db error")
-		return
+		return nil
 	}
 
 	if teWithS.SellerID != sellerID {
 		outputErrorMsg(w, http.StatusForbidden, "権限がありません")
-		return
+		return nil
 	}
 
 	if teWithS.Status != ShippingsStatusWaitPickup && teWithS.Status != ShippingsStatusShipping {
 		outputErrorMsg(w, http.StatusForbidden, "qrcode not available")
-		return
+		return nil
 	}
 
 	if len(teWithS.ImgBinary) == 0 {
 		outputErrorMsg(w, http.StatusInternalServerError, "empty qrcode image")
-		return
+		return nil
 	}
 
 	w.Header().Set("Content-Type", "image/png")
 	w.Write(teWithS.ImgBinary)
+	return nil
 }
 
 type BuyingMutex struct {
@@ -1506,25 +1537,28 @@ func (s *BuyingMutexMap) Delete(key int64) {
 	s.s.Delete(key)
 }
 
-func postBuy(w http.ResponseWriter, r *http.Request) {
+func postBuy(c echo.Context) error {
+	r := c.Request()
+	w := c.Response().Writer
+
 	rb := reqBuy{}
 
 	err := json.NewDecoder(r.Body).Decode(&rb)
 	if err != nil {
 		outputErrorMsg(w, http.StatusBadRequest, "json decode error")
-		return
+		return nil
 	}
 	itemID := rb.ItemID
 
 	if rb.CSRFToken != getCSRFToken(r) {
 		outputErrorMsg(w, http.StatusUnprocessableEntity, "csrf token error")
-		return
+		return nil
 	}
 
 	buyer, errCode, errMsg := getUser(r)
 	if errMsg != "" {
 		outputErrorMsg(w, errCode, errMsg)
-		return
+		return nil
 	}
 
 	if mutex, isRunning := buyingMutexMap.Load(itemID); isRunning {
@@ -1539,10 +1573,10 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 		if mutex.Result != nil {
 			if *mutex.Result == true {
 				outputErrorMsg(w, http.StatusForbidden, "item is not for sale")
-				return
+				return nil
 			}
 			outputErrorMsg(w, http.StatusNotFound, "item or item seller not found")
-			return
+			return nil
 		}
 	} else {
 		l := new(sync.Mutex)
@@ -1558,7 +1592,7 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 		outputErrorMsg(w, http.StatusNotFound, "item or item seller not found")
 		tx.Rollback()
 		buyingMutexMap.SetInvalid(itemID)
-		return
+		return nil
 	}
 	if err != nil {
 		log.Print(err)
@@ -1566,21 +1600,21 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 		outputErrorMsg(w, http.StatusInternalServerError, "db error")
 		tx.Rollback()
 		buyingMutexMap.SetFailure(itemID)
-		return
+		return nil
 	}
 
 	if item.Status != ItemStatusOnSale {
 		outputErrorMsg(w, http.StatusForbidden, "item is not for sale")
 		tx.Rollback()
 		buyingMutexMap.SetSuccess(itemID)
-		return
+		return nil
 	}
 
 	if item.SellerID == buyer.ID {
 		outputErrorMsg(w, http.StatusForbidden, "自分の商品は買えません")
 		tx.Rollback()
 		buyingMutexMap.SetFailure(itemID)
-		return
+		return nil
 	}
 
 	category, err := getCategoryByID(item.CategoryID)
@@ -1590,14 +1624,14 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 		outputErrorMsg(w, http.StatusInternalServerError, "category id error")
 		tx.Rollback()
 		buyingMutexMap.SetFailure(itemID)
-		return
+		return nil
 	}
 
 	if rb.Token == "" {
 		outputErrorMsg(w, http.StatusBadRequest, "カード情報に誤りがあります")
 		tx.Rollback()
 		buyingMutexMap.SetFailure(itemID)
-		return
+		return nil
 	}
 
 	// addressとnameは書き変わらないのでRLockでとる
@@ -1606,7 +1640,7 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 		outputErrorMsg(w, http.StatusNotFound, "sellar not found")
 		tx.Rollback()
 		buyingMutexMap.SetFailure(itemID)
-		return
+		return nil
 	}
 
 	result, err := tx.Exec("INSERT INTO `transaction_evidences` (`seller_id`, `buyer_id`, `status`, `item_id`, `item_name`, `item_price`, `item_description`,`item_category_id`,`item_root_category_id`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -1626,7 +1660,7 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 		outputErrorMsg(w, http.StatusInternalServerError, "db error")
 		tx.Rollback()
 		buyingMutexMap.SetFailure(itemID)
-		return
+		return nil
 	}
 
 	transactionEvidenceID, err := result.LastInsertId()
@@ -1636,7 +1670,7 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 		outputErrorMsg(w, http.StatusInternalServerError, "db error")
 		tx.Rollback()
 		buyingMutexMap.SetFailure(itemID)
-		return
+		return nil
 	}
 
 	_, err = tx.Exec("UPDATE `items` SET `buyer_id` = ?, `status` = ?, `updated_at` = ? WHERE `id` = ?",
@@ -1651,7 +1685,7 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 		outputErrorMsg(w, http.StatusInternalServerError, "db error")
 		tx.Rollback()
 		buyingMutexMap.SetFailure(itemID)
-		return
+		return nil
 	}
 
 	// TODO: 並列
@@ -1705,7 +1739,7 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 				outputErrorMsg(w, http.StatusGatewayTimeout, "failed to request to shipment service")
 				tx.Rollback()
 				buyingMutexMap.SetFailure(itemID)
-				return
+				return nil
 			}
 		case str := <-pstrChan:
 			pstr = str.pstr
@@ -1716,7 +1750,7 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 				outputErrorMsg(w, http.StatusGatewayTimeout, "payment service is failed")
 				tx.Rollback()
 				buyingMutexMap.SetFailure(itemID)
-				return
+				return nil
 			}
 		}
 	}
@@ -1725,21 +1759,21 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 		outputErrorMsg(w, http.StatusBadRequest, "カード情報に誤りがあります")
 		tx.Rollback()
 		buyingMutexMap.SetFailure(itemID)
-		return
+		return nil
 	}
 
 	if pstr.Status == "fail" {
 		outputErrorMsg(w, http.StatusBadRequest, "カードの残高が足りません")
 		tx.Rollback()
 		buyingMutexMap.SetFailure(itemID)
-		return
+		return nil
 	}
 
 	if pstr.Status != "ok" {
 		outputErrorMsg(w, http.StatusBadRequest, "想定外のエラー")
 		tx.Rollback()
 		buyingMutexMap.SetFailure(itemID)
-		return
+		return nil
 	}
 
 	_, err = tx.Exec("INSERT INTO `shippings` (`transaction_evidence_id`, `status`, `item_name`, `item_id`, `reserve_id`, `reserve_time`, `to_address`, `to_name`, `from_address`, `from_name`, `img_binary`) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
@@ -1761,7 +1795,7 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 		outputErrorMsg(w, http.StatusInternalServerError, "db error")
 		tx.Rollback()
 		buyingMutexMap.SetFailure(itemID)
-		return
+		return nil
 	}
 
 	tx.Commit()
@@ -1769,6 +1803,7 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json;charset=utf-8")
 	json.NewEncoder(w).Encode(resBuy{TransactionEvidenceID: transactionEvidenceID})
+	return nil
 }
 
 type TeShip struct {
@@ -1778,13 +1813,16 @@ type TeShip struct {
 	ReserveID string `db:"reserve_id"`
 }
 
-func postShip(w http.ResponseWriter, r *http.Request) {
+func postShip(c echo.Context) error {
+	r := c.Request()
+	w := c.Response().Writer
+
 	reqps := reqPostShip{}
 
 	err := json.NewDecoder(r.Body).Decode(&reqps)
 	if err != nil {
 		outputErrorMsg(w, http.StatusBadRequest, "json decode error")
-		return
+		return nil
 	}
 
 	csrfToken := reqps.CSRFToken
@@ -1793,13 +1831,13 @@ func postShip(w http.ResponseWriter, r *http.Request) {
 	if csrfToken != getCSRFToken(r) {
 		outputErrorMsg(w, http.StatusUnprocessableEntity, "csrf token error")
 
-		return
+		return nil
 	}
 
 	sellerID, errCode, errMsg := getUserID(r)
 	if errMsg != "" {
 		outputErrorMsg(w, errCode, errMsg)
-		return
+		return nil
 	}
 
 	tx := dbx.MustBegin()
@@ -1809,25 +1847,25 @@ func postShip(w http.ResponseWriter, r *http.Request) {
 	if err == sql.ErrNoRows {
 		outputErrorMsg(w, http.StatusNotFound, "transaction_evidences or shippings not found")
 		tx.Rollback()
-		return
+		return nil
 	}
 	if err != nil {
 		log.Print(err)
 		outputErrorMsg(w, http.StatusInternalServerError, "db error")
 		tx.Rollback()
-		return
+		return nil
 	}
 
 	if teShip.SellerID != sellerID {
 		outputErrorMsg(w, http.StatusForbidden, "権限がありません")
 		tx.Rollback()
-		return
+		return nil
 	}
 
 	if teShip.TeStatus != TransactionEvidenceStatusWaitShipping {
 		outputErrorMsg(w, http.StatusForbidden, "準備ができていません")
 		tx.Rollback()
-		return
+		return nil
 	}
 
 	img, err := APIShipmentRequest(shipmentServiceURL, &APIShipmentRequestReq{
@@ -1838,7 +1876,7 @@ func postShip(w http.ResponseWriter, r *http.Request) {
 		outputErrorMsg(w, http.StatusGatewayTimeout, "failed to request to shipment service")
 		tx.Rollback()
 
-		return
+		return nil
 	}
 
 	_, err = tx.Exec("UPDATE `shippings` SET `status` = ?, `img_binary` = ?, `updated_at` = ? WHERE `transaction_evidence_id` = ?",
@@ -1852,7 +1890,7 @@ func postShip(w http.ResponseWriter, r *http.Request) {
 
 		outputErrorMsg(w, http.StatusInternalServerError, "db error")
 		tx.Rollback()
-		return
+		return nil
 	}
 
 	tx.Commit()
@@ -1862,6 +1900,7 @@ func postShip(w http.ResponseWriter, r *http.Request) {
 		ReserveID: teShip.ReserveID,
 	}
 	json.NewEncoder(w).Encode(rps)
+	return nil
 }
 
 type TeShipDone struct {
@@ -1871,13 +1910,16 @@ type TeShipDone struct {
 	ReserveID string `db:"reserve_id"`
 }
 
-func postShipDone(w http.ResponseWriter, r *http.Request) {
+func postShipDone(c echo.Context) error {
+	r := c.Request()
+	w := c.Response().Writer
+
 	reqpsd := reqPostShipDone{}
 
 	err := json.NewDecoder(r.Body).Decode(&reqpsd)
 	if err != nil {
 		outputErrorMsg(w, http.StatusBadRequest, "json decode error")
-		return
+		return nil
 	}
 
 	csrfToken := reqpsd.CSRFToken
@@ -1886,13 +1928,13 @@ func postShipDone(w http.ResponseWriter, r *http.Request) {
 	if csrfToken != getCSRFToken(r) {
 		outputErrorMsg(w, http.StatusUnprocessableEntity, "csrf token error")
 
-		return
+		return nil
 	}
 
 	sellerID, errCode, errMsg := getUserID(r)
 	if errMsg != "" {
 		outputErrorMsg(w, errCode, errMsg)
-		return
+		return nil
 	}
 
 	tx := dbx.MustBegin()
@@ -1902,25 +1944,25 @@ func postShipDone(w http.ResponseWriter, r *http.Request) {
 	if err == sql.ErrNoRows {
 		outputErrorMsg(w, http.StatusNotFound, "transaction_evidences or shippings not found")
 		tx.Rollback()
-		return
+		return nil
 	}
 	if err != nil {
 		log.Print(err)
 		outputErrorMsg(w, http.StatusInternalServerError, "db error")
 		tx.Rollback()
-		return
+		return nil
 	}
 
 	if teShipDone.SellerID != sellerID {
 		outputErrorMsg(w, http.StatusForbidden, "権限がありません")
 		tx.Rollback()
-		return
+		return nil
 	}
 
 	if teShipDone.SStatus != ShippingsStatusWaitPickup {
 		outputErrorMsg(w, http.StatusForbidden, "集荷予約されてません")
 		tx.Rollback()
-		return
+		return nil
 	}
 
 	status := checkShippingStatusWithCacheAny(teShipDone.TeID)
@@ -1931,14 +1973,14 @@ func postShipDone(w http.ResponseWriter, r *http.Request) {
 			outputErrorMsg(w, http.StatusGatewayTimeout, "failed to request to shipment service")
 			tx.Rollback()
 
-			return
+			return nil
 		}
 	}
 
 	if !(status == ShippingsStatusShipping || status == ShippingsStatusDone) {
 		outputErrorMsg(w, http.StatusForbidden, "shipment service側で配送中か配送完了になっていません")
 		tx.Rollback()
-		return
+		return nil
 	}
 
 	_, err = tx.Exec("UPDATE `shippings` AS `s` JOIN `transaction_evidences` AS `te` ON `s`.`transaction_evidence_id` = `te`.`id` SET `s`.`status` = ?, `s`.`updated_at` = ?, `te`.`status` = ?, `te`.`updated_at` = ? WHERE `s`.`transaction_evidence_id` = ?",
@@ -1953,22 +1995,26 @@ func postShipDone(w http.ResponseWriter, r *http.Request) {
 
 		outputErrorMsg(w, http.StatusInternalServerError, "db error")
 		tx.Rollback()
-		return
+		return nil
 	}
 
 	tx.Commit()
 
 	w.Header().Set("Content-Type", "application/json;charset=utf-8")
 	json.NewEncoder(w).Encode(resBuy{TransactionEvidenceID: teShipDone.TeID})
+	return nil
 }
 
-func postComplete(w http.ResponseWriter, r *http.Request) {
+func postComplete(c echo.Context) error {
+	r := c.Request()
+	w := c.Response().Writer
+
 	reqpc := reqPostComplete{}
 
 	err := json.NewDecoder(r.Body).Decode(&reqpc)
 	if err != nil {
 		outputErrorMsg(w, http.StatusBadRequest, "json decode error")
-		return
+		return nil
 	}
 
 	csrfToken := reqpc.CSRFToken
@@ -1977,13 +2023,13 @@ func postComplete(w http.ResponseWriter, r *http.Request) {
 	if csrfToken != getCSRFToken(r) {
 		outputErrorMsg(w, http.StatusUnprocessableEntity, "csrf token error")
 
-		return
+		return nil
 	}
 
 	buyerID, errCode, errMsg := getUserID(r)
 	if errMsg != "" {
 		outputErrorMsg(w, errCode, errMsg)
-		return
+		return nil
 	}
 
 	tx := dbx.MustBegin()
@@ -1992,24 +2038,24 @@ func postComplete(w http.ResponseWriter, r *http.Request) {
 	if err == sql.ErrNoRows {
 		outputErrorMsg(w, http.StatusNotFound, "transaction_evidences not found")
 		tx.Rollback()
-		return
+		return nil
 	}
 	if err != nil {
 		log.Print(err)
 		outputErrorMsg(w, http.StatusInternalServerError, "db error")
 		tx.Rollback()
-		return
+		return nil
 	}
 
 	if transactionEvidence.BuyerID != buyerID {
 		outputErrorMsg(w, http.StatusForbidden, "権限がありません")
-		return
+		return nil
 	}
 
 	if transactionEvidence.Status != TransactionEvidenceStatusWaitDone {
 		outputErrorMsg(w, http.StatusForbidden, "準備ができていません")
 		tx.Rollback()
-		return
+		return nil
 	}
 
 	_, err = tx.Exec("UPDATE `shippings` AS `s` JOIN `transaction_evidences` AS `te` ON `s`.`transaction_evidence_id` = `te`.`id` JOIN `items` AS `i` ON `i`.`id` = `te`.`item_id` SET `s`.`status` = ?, `s`.`updated_at` = ?, `te`.`status` = ?, `te`.`updated_at` = ?, `i`.`status` = ?, `i`.`updated_at` = ? WHERE `s`.`transaction_evidence_id` = ?",
@@ -2026,16 +2072,20 @@ func postComplete(w http.ResponseWriter, r *http.Request) {
 
 		outputErrorMsg(w, http.StatusInternalServerError, "db error")
 		tx.Rollback()
-		return
+		return nil
 	}
 
 	tx.Commit()
 
 	w.Header().Set("Content-Type", "application/json;charset=utf-8")
 	json.NewEncoder(w).Encode(resBuy{TransactionEvidenceID: transactionEvidence.ID})
+	return nil
 }
 
-func postSell(w http.ResponseWriter, r *http.Request) {
+func postSell(c echo.Context) error {
+	r := c.Request()
+	w := c.Response().Writer
+
 	csrfToken := r.FormValue("csrf_token")
 	name := r.FormValue("name")
 	description := r.FormValue("description")
@@ -2046,64 +2096,64 @@ func postSell(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Print(err)
 		outputErrorMsg(w, http.StatusBadRequest, "image error")
-		return
+		return nil
 	}
 	defer f.Close()
 
 	if csrfToken != getCSRFToken(r) {
 		outputErrorMsg(w, http.StatusUnprocessableEntity, "csrf token error")
-		return
+		return nil
 	}
 
 	categoryID, err := strconv.Atoi(categoryIDStr)
 	if err != nil || categoryID < 0 {
 		outputErrorMsg(w, http.StatusBadRequest, "category id error")
-		return
+		return nil
 	}
 
 	price, err := strconv.Atoi(priceStr)
 	if err != nil {
 		outputErrorMsg(w, http.StatusBadRequest, "price error")
-		return
+		return nil
 	}
 
 	if name == "" || description == "" || price == 0 || categoryID == 0 {
 		outputErrorMsg(w, http.StatusBadRequest, "all parameters are required")
 
-		return
+		return nil
 	}
 
 	if price < ItemMinPrice || price > ItemMaxPrice {
 		outputErrorMsg(w, http.StatusBadRequest, ItemPriceErrMsg)
 
-		return
+		return nil
 	}
 
 	category, err := getCategoryByID(categoryID)
 	if err != nil || category.ParentID == 0 {
 		//log.Print(categoryID, category)
 		outputErrorMsg(w, http.StatusBadRequest, "Incorrect category ID")
-		return
+		return nil
 	}
 
 	userID, errCode, errMsg := getUserID(r)
 	if errMsg != "" {
 		outputErrorMsg(w, errCode, errMsg)
-		return
+		return nil
 	}
 
 	img, err := ioutil.ReadAll(f)
 	if err != nil {
 		log.Print(err)
 		outputErrorMsg(w, http.StatusInternalServerError, "image error")
-		return
+		return nil
 	}
 
 	ext := filepath.Ext(header.Filename)
 
 	if !(ext == ".jpg" || ext == ".jpeg" || ext == ".png" || ext == ".gif") {
 		outputErrorMsg(w, http.StatusBadRequest, "unsupported image format error")
-		return
+		return nil
 	}
 
 	if ext == ".jpeg" {
@@ -2111,11 +2161,11 @@ func postSell(w http.ResponseWriter, r *http.Request) {
 	}
 
 	imgName := secureRandomStr(16) + ext
-	err = ioutil.WriteFile("../public/upload/" + imgName, img, 0644)
+	err = ioutil.WriteFile("../public/upload/"+imgName, img, 0644)
 	if err != nil {
 		log.Print(err)
 		outputErrorMsg(w, http.StatusInternalServerError, "Saving image failed")
-		return
+		return nil
 	}
 
 	usersCacheMutex.Lock()
@@ -2124,7 +2174,7 @@ func postSell(w http.ResponseWriter, r *http.Request) {
 	seller, ok := usersCache[userID]
 	if !ok {
 		outputErrorMsg(w, http.StatusNotFound, "user not found")
-		return
+		return nil
 	}
 
 	tx := dbx.MustBegin()
@@ -2143,7 +2193,7 @@ func postSell(w http.ResponseWriter, r *http.Request) {
 		log.Print(err)
 
 		outputErrorMsg(w, http.StatusInternalServerError, "db error")
-		return
+		return nil
 	}
 
 	itemID, err := result.LastInsertId()
@@ -2151,7 +2201,7 @@ func postSell(w http.ResponseWriter, r *http.Request) {
 		log.Print(err)
 
 		outputErrorMsg(w, http.StatusInternalServerError, "db error")
-		return
+		return nil
 	}
 
 	seller.NumSellItems++
@@ -2161,6 +2211,7 @@ func postSell(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json;charset=utf-8")
 	json.NewEncoder(w).Encode(resSell{ID: itemID})
+	return nil
 }
 
 func secureRandomStr(b int) string {
@@ -2171,12 +2222,15 @@ func secureRandomStr(b int) string {
 	return hex.EncodeToString(k)
 }
 
-func postBump(w http.ResponseWriter, r *http.Request) {
+func postBump(c echo.Context) error {
+	r := c.Request()
+	w := c.Response().Writer
+
 	rb := reqBump{}
 	err := json.NewDecoder(r.Body).Decode(&rb)
 	if err != nil {
 		outputErrorMsg(w, http.StatusBadRequest, "json decode error")
-		return
+		return nil
 	}
 
 	csrfToken := rb.CSRFToken
@@ -2184,13 +2238,13 @@ func postBump(w http.ResponseWriter, r *http.Request) {
 
 	if csrfToken != getCSRFToken(r) {
 		outputErrorMsg(w, http.StatusUnprocessableEntity, "csrf token error")
-		return
+		return nil
 	}
 
 	userID, errCode, errMsg := getUserID(r)
 	if errMsg != "" {
 		outputErrorMsg(w, errCode, errMsg)
-		return
+		return nil
 	}
 
 	tx := dbx.MustBegin()
@@ -2200,19 +2254,19 @@ func postBump(w http.ResponseWriter, r *http.Request) {
 	if err == sql.ErrNoRows {
 		outputErrorMsg(w, http.StatusNotFound, "item not found")
 		tx.Rollback()
-		return
+		return nil
 	}
 	if err != nil {
 		log.Print(err)
 		outputErrorMsg(w, http.StatusInternalServerError, "db error")
 		tx.Rollback()
-		return
+		return nil
 	}
 
 	if targetItem.SellerID != userID {
 		outputErrorMsg(w, http.StatusForbidden, "自分の商品以外は編集できません")
 		tx.Rollback()
-		return
+		return nil
 	}
 
 	usersCacheMutex.Lock()
@@ -2222,7 +2276,7 @@ func postBump(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		outputErrorMsg(w, http.StatusNotFound, "user not found")
 		tx.Rollback()
-		return
+		return nil
 	}
 
 	now := time.Now()
@@ -2230,7 +2284,7 @@ func postBump(w http.ResponseWriter, r *http.Request) {
 	if seller.LastBump.Add(BumpChargeSeconds).After(now) {
 		outputErrorMsg(w, http.StatusForbidden, "Bump not allowed")
 		tx.Rollback()
-		return
+		return nil
 	}
 
 	_, err = tx.Exec("UPDATE `items` SET `created_at`=?, `updated_at`=? WHERE id=?",
@@ -2241,7 +2295,7 @@ func postBump(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Print(err)
 		outputErrorMsg(w, http.StatusInternalServerError, "db error")
-		return
+		return nil
 	}
 
 	seller.LastBump = now
@@ -2252,7 +2306,7 @@ func postBump(w http.ResponseWriter, r *http.Request) {
 		log.Print(err)
 		outputErrorMsg(w, http.StatusInternalServerError, "db error")
 		tx.Rollback()
-		return
+		return nil
 	}
 
 	tx.Commit()
@@ -2264,9 +2318,13 @@ func postBump(w http.ResponseWriter, r *http.Request) {
 		ItemCreatedAt: targetItem.CreatedAt.Unix(),
 		ItemUpdatedAt: targetItem.UpdatedAt.Unix(),
 	})
+	return nil
 }
 
-func getSettings(w http.ResponseWriter, r *http.Request) {
+func getSettings(c echo.Context) error {
+	r := c.Request()
+	w := c.Response().Writer
+
 	csrfToken := getCSRFToken(r)
 
 	user, _, errMsg := getUser(r)
@@ -2287,24 +2345,28 @@ func getSettings(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json;charset=utf-8")
 	json.NewEncoder(w).Encode(ress)
+	return nil
 }
 
-func postLogin(w http.ResponseWriter, r *http.Request) {
+func postLogin(c echo.Context) error {
+	r := c.Request()
+	w := c.Response().Writer
+
 	user, statusCode := APIAuthCheck(&r.Body)
 	if statusCode == http.StatusUnauthorized {
 		outputErrorMsg(w, http.StatusUnauthorized, "アカウント名かパスワードが間違えています")
-		return
+		return nil
 	}
 	if statusCode != http.StatusOK {
 		outputErrorMsg(w, http.StatusInternalServerError, "internal request failed")
-		return
+		return nil
 	}
 
 	//rl := reqLogin{}
 	//err := json.NewDecoder(r.Body).Decode(&rl)
 	//if err != nil {
 	//	outputErrorMsg(w, http.StatusBadRequest, "json decode error")
-	//	return
+	//	return nil
 	//}
 	//
 	//accountName := rl.AccountName
@@ -2313,32 +2375,32 @@ func postLogin(w http.ResponseWriter, r *http.Request) {
 	//if accountName == "" || password == "" {
 	//	outputErrorMsg(w, http.StatusBadRequest, "all parameters are required")
 	//
-	//	return
+	//	return nil
 	//}
 	//
 	//u := User{}
 	//err = dbx.Get(&u, "SELECT * FROM `users` WHERE `account_name` = ?", accountName)
 	//if err == sql.ErrNoRows {
 	//	outputErrorMsg(w, http.StatusUnauthorized, "アカウント名かパスワードが間違えています")
-	//	return
+	//	return nil
 	//}
 	//if err != nil {
 	//	log.Print(err)
 	//
 	//	outputErrorMsg(w, http.StatusInternalServerError, "db error")
-	//	return
+	//	return nil
 	//}
 	//
 	//err = bcrypt.CompareHashAndPassword(u.HashedPassword, []byte(password))
 	//if err == bcrypt.ErrMismatchedHashAndPassword {
 	//	outputErrorMsg(w, http.StatusUnauthorized, "アカウント名かパスワードが間違えています")
-	//	return
+	//	return nil
 	//}
 	//if err != nil {
 	//	log.Print(err)
 	//
 	//	outputErrorMsg(w, http.StatusInternalServerError, "crypt error")
-	//	return
+	//	return nil
 	//}
 
 	setSession(w, SessionData{
@@ -2348,14 +2410,18 @@ func postLogin(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json;charset=utf-8")
 	json.NewEncoder(w).Encode(user)
+	return nil
 }
 
-func postRegister(w http.ResponseWriter, r *http.Request) {
+func postRegister(c echo.Context) error {
+	r := c.Request()
+	w := c.Response().Writer
+
 	rr := reqRegister{}
 	err := json.NewDecoder(r.Body).Decode(&rr)
 	if err != nil {
 		outputErrorMsg(w, http.StatusBadRequest, "json decode error")
-		return
+		return nil
 	}
 
 	accountName := rr.AccountName
@@ -2365,7 +2431,7 @@ func postRegister(w http.ResponseWriter, r *http.Request) {
 	if accountName == "" || password == "" || address == "" {
 		outputErrorMsg(w, http.StatusBadRequest, "all parameters are required")
 
-		return
+		return nil
 	}
 
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), BcryptCost)
@@ -2373,7 +2439,7 @@ func postRegister(w http.ResponseWriter, r *http.Request) {
 		log.Print(err)
 
 		outputErrorMsg(w, http.StatusInternalServerError, "error")
-		return
+		return nil
 	}
 
 	// ログインのためにDBに入れる
@@ -2386,7 +2452,7 @@ func postRegister(w http.ResponseWriter, r *http.Request) {
 		log.Print(err)
 
 		outputErrorMsg(w, http.StatusInternalServerError, "db error")
-		return
+		return nil
 	}
 
 	userID, err := result.LastInsertId()
@@ -2395,7 +2461,7 @@ func postRegister(w http.ResponseWriter, r *http.Request) {
 		log.Print(err)
 
 		outputErrorMsg(w, http.StatusInternalServerError, "db error")
-		return
+		return nil
 	}
 
 	u := User{
@@ -2415,19 +2481,23 @@ func postRegister(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json;charset=utf-8")
 	json.NewEncoder(w).Encode(u)
+	return nil
 }
 
-func getReports(w http.ResponseWriter, r *http.Request) {
+func getReports(c echo.Context) error {
+	w := c.Response().Writer
+
 	transactionEvidences := make([]TransactionEvidence, 0)
 	err := dbx.Select(&transactionEvidences, "SELECT * FROM `transaction_evidences` WHERE `id` > 15007")
 	if err != nil {
 		log.Print(err)
 		outputErrorMsg(w, http.StatusInternalServerError, "db error")
-		return
+		return nil
 	}
 
 	w.Header().Set("Content-Type", "application/json;charset=utf-8")
 	json.NewEncoder(w).Encode(transactionEvidences)
+	return nil
 }
 
 func outputErrorMsg(w http.ResponseWriter, status int, msg string) {

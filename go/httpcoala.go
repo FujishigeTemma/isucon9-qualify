@@ -6,32 +6,32 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+  "github.com/labstack/echo/v4"
 )
 
 // Route middleware handler will coalesce multiple requests for the same URI
 // (and routed methods) to be processed as a single request.
-func coalaRoute(methods ...string) func(next http.Handler) http.Handler {
+func coalaRoute(methods ...string) func(next echo.HandlerFunc) echo.HandlerFunc {
 	coalescer := newCoalescer(methods...)
 
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-
-			bw, sw, ok := coalescer.Route(w, r)
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			bw, sw, ok := coalescer.Route(c.Response().Writer, c.Request())
 
 			if !ok {
-				next.ServeHTTP(w, r)
-				return
+				next(c)
+				return nil
 			}
 
 			if sw != nil {
 				<-sw.Flushed()
-				return
+				return nil
 			}
 
-			defer coalescer.Flush(bw, r)
-			next.ServeHTTP(bw, r)
-
-		})
+			defer coalescer.Flush(bw, c.Request())
+			next(c)
+			return nil
+		}
 	}
 }
 
