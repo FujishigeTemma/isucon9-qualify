@@ -361,11 +361,11 @@ func main() {
 	http.DefaultTransport.(*http.Transport).ForceAttemptHTTP2 = true
 	http.DefaultClient.Timeout = 5 * time.Second
 
-	coala := coalaRoute("GET")
 
 	e := echo.New()
 
-	e.Use(coala)
+	//coala := coalaRoute("GET")
+	//e.Use(coala)
 
 	// API
 	e.POST("/initialize", postInitialize)
