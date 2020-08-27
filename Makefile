@@ -137,7 +137,7 @@ pprof:
 	@$(PPROF)
 	@go tool pprof -png -output pprof.png profile.pb.gz
 	@$(SLACKRAW) pprof -n pprof.png ./pprof.png
-	@go tool pprof -http=$(HOST_ADDRESS):6000 -no_browser profile.pb.gz
+	@go tool pprof -http=$(HOST_ADDRESS):6600 -no_browser profile.pb.gz
 
 .PHONY: dumpslow
 dumpslow:
