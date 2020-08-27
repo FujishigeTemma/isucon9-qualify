@@ -670,7 +670,7 @@ func getNewCategoryItems(w http.ResponseWriter, r *http.Request) {
 	if itemID > 0 && createdAt > 0 {
 		// paging
 		inQuery, inArgs, err = sqlx.In(
-			"SELECT * FROM `items` WHERE `status` = ? AND category_id IN (?) AND (`created_at` < ?  OR (`created_at` = ? AND `id` < ?)) ORDER BY `created_at` DESC LIMIT ?",
+			"SELECT * FROM `items` WHERE `status` = ? AND parent_category_id = ? AND (`created_at` < ?  OR (`created_at` = ? AND `id` < ?)) ORDER BY `created_at` DESC LIMIT ?",
 			ItemStatusOnSale,
 			categoryIDs,
 			time.Unix(createdAt, 0),
@@ -686,7 +686,7 @@ func getNewCategoryItems(w http.ResponseWriter, r *http.Request) {
 	} else {
 		// 1st page
 		inQuery, inArgs, err = sqlx.In(
-			"SELECT * FROM `items` WHERE `status` = ? AND category_id IN (?) ORDER BY created_at DESC LIMIT ?",
+			"SELECT * FROM `items` WHERE `status` = ? AND parent_category_id = ? ORDER BY created_at DESC LIMIT ?",
 			ItemStatusOnSale,
 			categoryIDs,
 			ItemsPerPage+1,
@@ -2138,7 +2138,7 @@ func postSell(w http.ResponseWriter, r *http.Request) {
 
 	tx := dbx.MustBegin()
 
-	result, err := tx.Exec("INSERT INTO `items` (`seller_id`, `status`, `name`, `price`, `description`,`image_name`,`category_id`) VALUES (?, ?, ?, ?, ?, ?, ?)",
+	result, err := tx.Exec("INSERT INTO `items` (`seller_id`, `status`, `name`, `price`, `description`,`image_name`,`category_id`,`parent_category_id`) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
 		seller.ID,
 		ItemStatusOnSale,
 		name,
@@ -2146,6 +2146,7 @@ func postSell(w http.ResponseWriter, r *http.Request) {
 		description,
 		imgName,
 		category.ID,
+		category.ParentID,
 	)
 	if err != nil {
 		log.Print(err)

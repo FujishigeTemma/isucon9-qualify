@@ -28,13 +28,15 @@ CREATE TABLE `items` (
   `description` text NOT NULL,
   `image_name` varchar(191) NOT NULL,
   `category_id` int unsigned NOT NULL,
+  `parent_category_id` int unsigned NOT NULL,
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   INDEX idx_category_id (`category_id`),
   INDEX idx_created_at (`created_at`),
   INDEX mul_idx_seller_id_created_at (`seller_id`, `created_at`),
   INDEX mul_idx_buyer_id_created_at (`buyer_id`, `created_at`),
-  INDEX mul_idx_status_created_at (`status`, `created_at`)
+  INDEX mul_idx_status_created_at (`status`, `created_at`),
+  INDEX mul_idx_status_parent_category_id_created_at (`status`, `parent_category_id`, `created_at`)
 ) ENGINE=InnoDB DEFAULT CHARACTER SET utf8mb4;
 
 DROP TABLE IF EXISTS `transaction_evidences`;
