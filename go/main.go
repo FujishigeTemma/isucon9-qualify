@@ -66,6 +66,7 @@ var (
 	dbx                      *sqlx.DB
 	store                    sessions.Store
 	categoryCache            map[int]Category
+	childCategoriesCache     map[int][]int
 	doneTransactionEvidences map[int64]struct{}
 	buyingMutexMap           BuyingMutexMap
 
@@ -439,17 +440,9 @@ func getUserSimplesByIDs(q sqlx.Queryer, userIDs []int64) (userSimpleMap map[int
 }
 
 func getCategoryByID(categoryID int) (category Category, err error) {
-	category = categoryCache[categoryID]
-	if category.ID == 0 {
+	category, ok := categoryCache[categoryID]
+	if !ok || category.ID == 0 {
 		return category, errors.New("nothing category")
-	}
-	// err = sqlx.Get(q, &category, "SELECT * FROM `categories` WHERE `id` = ?", categoryID)
-	if category.ParentID != 0 {
-		parentCategory, err := getCategoryByID(category.ParentID)
-		if err != nil {
-			return category, err
-		}
-		category.ParentCategoryName = parentCategory.CategoryName
 	}
 	return category, err
 }
@@ -495,6 +488,24 @@ func postInitialize(w http.ResponseWriter, r *http.Request) {
 	categoryCache = make(map[int]Category, len(categories))
 	for _, c := range categories {
 		categoryCache[c.ID] = c
+	}
+	for _, c := range categoryCache {
+		if c.ParentID != 0 {
+			parentCategory := categoryCache[c.ParentID]
+			c.ParentCategoryName = parentCategory.CategoryName
+		}
+	}
+	childCategoriesCache = make(map[int][]int)
+	for _, c := range categories {
+		if c.ParentID == 0 {
+			continue
+		}
+		_, ok := childCategoriesCache[c.ParentID]
+		if !ok {
+			childCategoriesCache[c.ParentID] = make([]int, 0)
+		}
+		cIDs := childCategoriesCache[c.ParentID]
+		childCategoriesCache[c.ParentID] = append(cIDs, c.ID)
 	}
 
 	// userのメモリキャッシュ
@@ -644,12 +655,7 @@ func getNewCategoryItems(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	categoryIDs := make([]int, 0)
-	for _, c := range categoryCache {
-		if rootCategory.ID == c.ParentID {
-			categoryIDs = append(categoryIDs, c.ID)
-		}
-	}
+	categoryIDs := childCategoriesCache[rootCategoryID]
 
 	query := r.URL.Query()
 	itemIDStr := query.Get("item_id")
