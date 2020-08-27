@@ -26,7 +26,7 @@ import (
 )
 
 var json = jsoniter.Config{
-	EscapeHTML: false,
+	EscapeHTML:                    false,
 	ObjectFieldMustBeSimpleString: true,
 }.Froze()
 
@@ -126,17 +126,18 @@ func (p *ItemsPool) Put(i []Item) {
 }
 
 type Item struct {
-	ID          int64     `json:"id" db:"id"`
-	SellerID    int64     `json:"seller_id" db:"seller_id"`
-	BuyerID     int64     `json:"buyer_id" db:"buyer_id"`
-	Status      string    `json:"status" db:"status"`
-	Name        string    `json:"name" db:"name"`
-	Price       int       `json:"price" db:"price"`
-	Description string    `json:"description" db:"description"`
-	ImageName   string    `json:"image_name" db:"image_name"`
-	CategoryID  int       `json:"category_id" db:"category_id"`
-	CreatedAt   time.Time `json:"-" db:"created_at"`
-	UpdatedAt   time.Time `json:"-" db:"updated_at"`
+	ID               int64     `json:"id" db:"id"`
+	SellerID         int64     `json:"seller_id" db:"seller_id"`
+	BuyerID          int64     `json:"buyer_id" db:"buyer_id"`
+	Status           string    `json:"status" db:"status"`
+	Name             string    `json:"name" db:"name"`
+	Price            int       `json:"price" db:"price"`
+	Description      string    `json:"description" db:"description"`
+	ImageName        string    `json:"image_name" db:"image_name"`
+	CategoryID       int       `json:"category_id" db:"category_id"`
+	ParentCategoryID int       `json:"-" db:"parent_category_id"`
+	CreatedAt        time.Time `json:"-" db:"created_at"`
+	UpdatedAt        time.Time `json:"-" db:"updated_at"`
 }
 
 type ItemSimple struct {
@@ -642,8 +643,6 @@ func getNewCategoryItems(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	categoryIDs := childCategoriesCache[rootCategoryID]
-
 	query := r.URL.Query()
 	itemIDStr := query.Get("item_id")
 	var itemID int64
@@ -665,14 +664,13 @@ func getNewCategoryItems(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	var inQuery string
-	var inArgs []interface{}
+	items := itemsPool.Get()
 	if itemID > 0 && createdAt > 0 {
 		// paging
-		inQuery, inArgs, err = sqlx.In(
-			"SELECT * FROM `items` WHERE `status` = ? AND parent_category_id = ? AND (`created_at` < ?  OR (`created_at` = ? AND `id` < ?)) ORDER BY `created_at` DESC LIMIT ?",
+		err = dbx.Select(&items,
+			"SELECT * FROM `items` WHERE `status` = ? AND `parent_category_id` = ? AND (`created_at` < ?  OR (`created_at` = ? AND `id` < ?)) ORDER BY `created_at` DESC LIMIT ?",
 			ItemStatusOnSale,
-			categoryIDs,
+			rootCategoryID,
 			time.Unix(createdAt, 0),
 			time.Unix(createdAt, 0),
 			itemID,
@@ -685,10 +683,10 @@ func getNewCategoryItems(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		// 1st page
-		inQuery, inArgs, err = sqlx.In(
-			"SELECT * FROM `items` WHERE `status` = ? AND parent_category_id = ? ORDER BY created_at DESC LIMIT ?",
+		err = dbx.Select(&items,
+			"SELECT * FROM `items` WHERE `status` = ? AND `parent_category_id` = ? ORDER BY created_at DESC LIMIT ?",
 			ItemStatusOnSale,
-			categoryIDs,
+			rootCategoryID,
 			ItemsPerPage+1,
 		)
 		if err != nil {
@@ -696,15 +694,6 @@ func getNewCategoryItems(w http.ResponseWriter, r *http.Request) {
 			outputErrorMsg(w, http.StatusInternalServerError, "db error")
 			return
 		}
-	}
-
-	items := itemsPool.Get()
-	err = dbx.Select(&items, inQuery, inArgs...)
-
-	if err != nil {
-		log.Print(err)
-		outputErrorMsg(w, http.StatusInternalServerError, "db error")
-		return
 	}
 
 	itemSimples := make([]*ItemSimple, len(items))
@@ -2350,8 +2339,8 @@ func postLogin(w http.ResponseWriter, r *http.Request) {
 	//	return
 	//}
 
-	setSession(w, SessionData {
-		UserID: user.ID,
+	setSession(w, SessionData{
+		UserID:    user.ID,
 		CsrfToken: secureRandomStr(20),
 	})
 
@@ -2417,8 +2406,8 @@ func postRegister(w http.ResponseWriter, r *http.Request) {
 	usersCache[userID] = u
 	usersCacheMutex.Unlock()
 
-	setSession(w, SessionData {
-		UserID: u.ID,
+	setSession(w, SessionData{
+		UserID:    u.ID,
 		CsrfToken: secureRandomStr(20),
 	})
 
