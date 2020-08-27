@@ -2305,17 +2305,22 @@ func getSettings(w http.ResponseWriter, r *http.Request) {
 
 func postLogin(w http.ResponseWriter, r *http.Request) {
 	res, statusCode := APIAuthCheck(&r.Body)
+	log.Println("response")
 	if statusCode == http.StatusUnauthorized {
+		log.Println("401")
 		outputErrorMsg(w, http.StatusUnauthorized, "アカウント名かパスワードが間違えています")
 		return
 	}
 	if statusCode != http.StatusOK {
+		log.Println("not 200")
 		outputErrorMsg(w, http.StatusInternalServerError, "internal request failed")
 		return
 	}
 
+	log.Println("get")
 	user, ok := readUserFromCacheByAccountName(res.AccountName)
 	if !ok {
+		log.Println("not found")
 		outputErrorMsg(w, http.StatusInternalServerError, "user not found by account_name")
 		return
 	}
@@ -2361,14 +2366,18 @@ func postLogin(w http.ResponseWriter, r *http.Request) {
 	//	return
 	//}
 
+	log.Println("session set")
 
 	setSession(w, SessionData{
 		UserID:    user.ID,
 		CsrfToken: secureRandomStr(20),
 	})
 
+	log.Println("session has set")
+
 	w.Header().Set("Content-Type", "application/json;charset=utf-8")
 	json.NewEncoder(w).Encode(user)
+	log.Println("responded")
 }
 
 func postRegister(w http.ResponseWriter, r *http.Request) {
