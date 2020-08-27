@@ -72,7 +72,6 @@ var (
 	itemsPool                = NewItemsPool(ItemsPerPage + 1)
 	itemsTPool               = NewItemsPool(TransactionsPerPage + 1)
 	itemEPool                = NewItemEPool()
-	itemDetailPool           = NewItemDetailPool()
 
 	usersCache      map[int64]User
 	usersCacheMutex sync.RWMutex
@@ -169,26 +168,6 @@ type ItemDetail struct {
 	TransactionEvidenceStatus string      `json:"transaction_evidence_status,omitempty"`
 	ShippingStatus            string      `json:"shipping_status,omitempty"`
 	CreatedAt                 int64       `json:"created_at"`
-}
-
-type ItemDetailPool struct {
-	p sync.Pool
-}
-
-func NewItemDetailPool() ItemDetailPool {
-	return ItemDetailPool{
-		p: sync.Pool{
-			New: func() interface{} {
-				return &ItemDetail{}
-			},
-		},
-	}
-}
-func (p *ItemDetailPool) Get() *ItemDetail {
-	return p.p.Get().(*ItemDetail)
-}
-func (p *ItemDetailPool) Put(i *ItemDetail) {
-	p.p.Put(i)
 }
 
 type TransactionEvidence struct {
@@ -1334,23 +1313,24 @@ func getItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	itemDetail := itemDetailPool.Get()
-	itemDetail.ID = item.ID
-	itemDetail.SellerID = item.SellerID
-	itemDetail.Seller = &seller
-	itemDetail.BuyerID = 0
-	itemDetail.Buyer = nil
-	itemDetail.Status = item.Status
-	itemDetail.Name = item.Name
-	itemDetail.Price = item.Price
-	itemDetail.Description = item.Description
-	itemDetail.ImageURL = getImageURL(item.ImageName)
-	itemDetail.CategoryID = item.CategoryID
-	itemDetail.TransactionEvidenceID = 0
-	itemDetail.TransactionEvidenceStatus = ""
-	itemDetail.ShippingStatus = ""
-	itemDetail.Category = &category
-	itemDetail.CreatedAt = item.CreatedAt.Unix()
+	itemDetail := ItemDetail{
+		ID:       item.ID,
+		SellerID: item.SellerID,
+		Seller:   &seller,
+		// BuyerID
+		// Buyer
+		Status:      item.Status,
+		Name:        item.Name,
+		Price:       item.Price,
+		Description: item.Description,
+		ImageURL:    getImageURL(item.ImageName),
+		CategoryID:  item.CategoryID,
+		// TransactionEvidenceID
+		// TransactionEvidenceStatus
+		// ShippingStatus
+		Category:  &category,
+		CreatedAt: item.CreatedAt.Unix(),
+	}
 
 	if (userID == item.SellerID || userID == item.BuyerID) && item.BuyerID != 0 {
 		buyer, err := getUserSimpleByID(dbx, item.BuyerID)
@@ -1377,8 +1357,6 @@ func getItem(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json;charset=utf-8")
 	json.NewEncoder(w).Encode(itemDetail)
-
-	itemDetailPool.Put(itemDetail)
 }
 
 func postItemEdit(w http.ResponseWriter, r *http.Request) {
