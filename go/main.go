@@ -3,6 +3,7 @@ package main
 import (
 	crand "crypto/rand"
 	"database/sql"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -221,20 +222,20 @@ type resInitialize struct {
 }
 
 type resNewItems struct {
-	RootCategoryID   int           `json:"root_category_id,omitempty"`
-	RootCategoryName string        `json:"root_category_name,omitempty"`
-	HasNext          bool          `json:"has_next"`
+	RootCategoryID   int          `json:"root_category_id,omitempty"`
+	RootCategoryName string       `json:"root_category_name,omitempty"`
+	HasNext          bool         `json:"has_next"`
 	Items            []ItemSimple `json:"items"`
 }
 
 type resUserItems struct {
-	User    *UserSimple   `json:"user"`
-	HasNext bool          `json:"has_next"`
+	User    *UserSimple  `json:"user"`
+	HasNext bool         `json:"has_next"`
 	Items   []ItemSimple `json:"items"`
 }
 
 type resTransactions struct {
-	HasNext bool          `json:"has_next"`
+	HasNext bool         `json:"has_next"`
 	Items   []ItemDetail `json:"items"`
 }
 
@@ -1856,7 +1857,7 @@ func postShip(w http.ResponseWriter, r *http.Request) {
 	tx.Commit()
 
 	rps := resPostShip{
-		Path:      fmt.Sprintf("/transactions/%d.png", teShip.TeID),
+		Path:      "/transactions/" + strconv.FormatInt(teShip.TeID, 10) + ".png",
 		ReserveID: teShip.ReserveID,
 	}
 	json.NewEncoder(w).Encode(rps)
@@ -2108,8 +2109,8 @@ func postSell(w http.ResponseWriter, r *http.Request) {
 		ext = ".jpg"
 	}
 
-	imgName := fmt.Sprintf("%s%s", secureRandomStr(16), ext)
-	err = ioutil.WriteFile(fmt.Sprintf("../public/upload/%s", imgName), img, 0644)
+	imgName := secureRandomStr(16) + ext
+	err = ioutil.WriteFile("../public/upload/" + imgName, img, 0644)
 	if err != nil {
 		log.Print(err)
 		outputErrorMsg(w, http.StatusInternalServerError, "Saving image failed")
@@ -2166,7 +2167,7 @@ func secureRandomStr(b int) string {
 	if _, err := crand.Read(k); err != nil {
 		panic(err)
 	}
-	return fmt.Sprintf("%x", k)
+	return hex.EncodeToString(k)
 }
 
 func postBump(w http.ResponseWriter, r *http.Request) {
