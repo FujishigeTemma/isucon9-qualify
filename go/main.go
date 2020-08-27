@@ -2509,5 +2509,5 @@ func outputErrorMsg(w http.ResponseWriter, status int, msg string) {
 }
 
 func getImageURL(imageName string) string {
-	return fmt.Sprintf("/upload/%s", imageName)
+	return "/upload/" + imageName
 }
