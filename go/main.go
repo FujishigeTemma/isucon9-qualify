@@ -69,6 +69,7 @@ var (
 	childCategoriesCache     map[int][]int
 	doneTransactionEvidences map[int64]struct{}
 	buyingMutexMap           BuyingMutexMap
+	itemEPool                = NewItemEPool()
 
 	usersCache      map[int64]User
 	usersCacheMutex sync.RWMutex
@@ -1212,6 +1213,26 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 
 }
 
+type ItemEPool struct {
+	p sync.Pool
+}
+
+func NewItemEPool() ItemEPool {
+	return ItemEPool{
+		p: sync.Pool{
+			New: func() interface{} {
+				return &ItemE{}
+			},
+		},
+	}
+}
+func (p *ItemEPool) Get() *ItemE {
+	return p.p.Get().(*ItemE)
+}
+func (p *ItemEPool) Put(i *ItemE) {
+	p.p.Put(i)
+}
+
 type ItemE struct {
 	Item                      Item           `db:"i"`
 	TransactionEvidenceID     sql.NullInt64  `db:"te_id"`
@@ -1233,9 +1254,9 @@ func getItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	itemE := ItemE{}
+	itemE := itemEPool.Get()
 	rows := "i.id AS `i.id`, i.seller_id AS `i.seller_id`, i.buyer_id AS `i.buyer_id`, i.status AS `i.status`, i.name AS `i.name`, i.price AS `i.price`, i.description AS `i.description`, i.image_name AS `i.image_name`, i.category_id AS `i.category_id`, te.id AS `te_id`, te.status AS `te_status`, s.status AS `s_status`"
-	err = dbx.Get(&itemE, "SELECT "+rows+" FROM `items` AS `i` LEFT JOIN `transaction_evidences` AS `te` ON `te`.`item_id` = `i`.`id` LEFT JOIN `shippings` AS `s` ON `s`.`transaction_evidence_id` = `te`.`id` WHERE `i`.`id` = ?", itemID)
+	err = dbx.Get(itemE, "SELECT "+rows+" FROM `items` AS `i` LEFT JOIN `transaction_evidences` AS `te` ON `te`.`item_id` = `i`.`id` LEFT JOIN `shippings` AS `s` ON `s`.`transaction_evidence_id` = `te`.`id` WHERE `i`.`id` = ?", itemID)
 	if err == sql.ErrNoRows {
 		outputErrorMsg(w, http.StatusNotFound, "item not found")
 		return
@@ -1298,6 +1319,8 @@ func getItem(w http.ResponseWriter, r *http.Request) {
 			itemDetail.ShippingStatus = itemE.ShippingStatus.String
 		}
 	}
+
+	itemEPool.Put(itemE)
 
 	w.Header().Set("Content-Type", "application/json;charset=utf-8")
 	json.NewEncoder(w).Encode(itemDetail)
