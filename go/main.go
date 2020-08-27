@@ -1599,7 +1599,7 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 		buyingMutexMap.SetFailure(itemID)
 		return
 	}
-	if _, ok := moneylessUsers[buyer.ID]; !ok {
+	if _, ok := moneylessUsers[buyer.ID]; ok {
 		outputErrorMsg(w, http.StatusBadRequest, "カード情報に誤りがあるか残高不足です")
 		tx.Rollback()
 		buyingMutexMap.SetFailure(itemID)
