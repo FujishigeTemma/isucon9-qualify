@@ -311,7 +311,7 @@ type resSetting struct {
 }
 
 func init() {
-	store = memstore.NewMemStore([]byte("key"), []byte("key1234123456789"))
+	store = memstore.NewMemStore([]byte("abc"), []byte("abc"))
 
 	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
 }
