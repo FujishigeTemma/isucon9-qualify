@@ -111,7 +111,8 @@ func NewItemsPool(length int) ItemsPool {
 	return ItemsPool{
 		p: sync.Pool{
 			New: func() interface{} {
-				return make([]Item, 0, length)
+				items := make([]Item, 0, length)
+				return &items
 			},
 		},
 	}
