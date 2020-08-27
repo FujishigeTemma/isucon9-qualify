@@ -28,15 +28,15 @@ func main() {
 	ioutil.WriteFile("./initial2.sql", []byte(output), 0666)
 }
 
-const prefix = "INSERT INTO `items` (`id`,`seller_id`,`buyer_id`,`status`,`name`,`price`,`description`,`image_name`,`category_id`,`created_at`,`updated_at`) VALUES "
-var prefixRe = regexp.MustCompile(``)
+const prefixBefore = "INSERT INTO `items` (`id`,`seller_id`,`buyer_id`,`status`,`name`,`price`,`description`,`image_name`,`category_id`,`created_at`,`updated_at`) VALUES "
+const prefixAfter = "INSERT INTO `items` (`id`,`seller_id`,`buyer_id`,`status`,`name`,`price`,`description`,`image_name`,`category_id`,`parent_category_id`,`created_at`,`updated_at`) VALUES "
 
 func addParentCategoryIds(line string) string {
-	line = strings.TrimPrefix(line, prefix)
+	line = strings.TrimPrefix(line, prefixBefore)
 	itemStrings := strings.SplitAfter(line, "), ")
 
 	var builder strings.Builder
-	builder.WriteString(prefix)
+	builder.WriteString(prefixAfter)
 	for i := range itemStrings {
 		builder.WriteString(addParentCategoryId(itemStrings[i]))
 	}
