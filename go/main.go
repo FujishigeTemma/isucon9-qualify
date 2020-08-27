@@ -224,18 +224,18 @@ type resNewItems struct {
 	RootCategoryID   int           `json:"root_category_id,omitempty"`
 	RootCategoryName string        `json:"root_category_name,omitempty"`
 	HasNext          bool          `json:"has_next"`
-	Items            []*ItemSimple `json:"items"`
+	Items            []ItemSimple `json:"items"`
 }
 
 type resUserItems struct {
 	User    *UserSimple   `json:"user"`
 	HasNext bool          `json:"has_next"`
-	Items   []*ItemSimple `json:"items"`
+	Items   []ItemSimple `json:"items"`
 }
 
 type resTransactions struct {
 	HasNext bool          `json:"has_next"`
-	Items   []*ItemDetail `json:"items"`
+	Items   []ItemDetail `json:"items"`
 }
 
 type reqRegister struct {
@@ -580,7 +580,7 @@ func getNewItems(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	itemSimples := make([]*ItemSimple, len(items))
+	itemSimples := make([]ItemSimple, len(items))
 	if err != nil {
 		outputErrorMsg(w, http.StatusNotFound, "seller not found")
 		return
@@ -597,7 +597,7 @@ func getNewItems(w http.ResponseWriter, r *http.Request) {
 			outputErrorMsg(w, http.StatusNotFound, "category not found")
 			return
 		}
-		itemSimples[i] = &ItemSimple{
+		itemSimples[i] = ItemSimple{
 			ID:         items[i].ID,
 			SellerID:   items[i].SellerID,
 			Seller:     &seller,
@@ -696,7 +696,7 @@ func getNewCategoryItems(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	itemSimples := make([]*ItemSimple, len(items))
+	itemSimples := make([]ItemSimple, len(items))
 
 	for i := range items {
 		seller, err := getUserSimpleByID(items[i].SellerID)
@@ -709,7 +709,7 @@ func getNewCategoryItems(w http.ResponseWriter, r *http.Request) {
 			outputErrorMsg(w, http.StatusNotFound, "category not found")
 			return
 		}
-		itemSimples[i] = &ItemSimple{
+		itemSimples[i] = ItemSimple{
 			ID:         items[i].ID,
 			SellerID:   items[i].SellerID,
 			Seller:     &seller,
@@ -781,7 +781,7 @@ func getUserItems(w http.ResponseWriter, r *http.Request) {
 	if userSimple.NumSellItems == 0 {
 		rui := resUserItems{
 			User:    &userSimple,
-			Items:   []*ItemSimple{},
+			Items:   []ItemSimple{},
 			HasNext: false,
 		}
 		w.Header().Set("Content-Type", "application/json;charset=utf-8")
@@ -819,14 +819,14 @@ func getUserItems(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	itemSimples := make([]*ItemSimple, len(items))
+	itemSimples := make([]ItemSimple, len(items))
 	for i := range items {
 		category, err := getCategoryByID(items[i].CategoryID)
 		if err != nil {
 			outputErrorMsg(w, http.StatusNotFound, "category not found")
 			return
 		}
-		itemSimples[i] = &ItemSimple{
+		itemSimples[i] = ItemSimple{
 			ID:         items[i].ID,
 			SellerID:   items[i].SellerID,
 			Seller:     &userSimple,
@@ -1111,7 +1111,7 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	itemDetails := make([]*ItemDetail, len(items))
+	itemDetails := make([]ItemDetail, len(items))
 	for i := range items {
 		seller, err := getUserSimpleByID(items[i].SellerID)
 		if err != nil {
