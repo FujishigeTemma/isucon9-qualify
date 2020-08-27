@@ -92,12 +92,13 @@ func readUserFromCache(userID int64) (User, bool) {
 }
 func readUserFromCacheByAccountName(accountName string) (User, bool) {
 	usersCacheMutex.RLock()
+	defer usersCacheMutex.RUnlock()
+
 	for i := range usersCache {
 		if usersCache[i].AccountName == accountName {
 			return usersCache[i], true
 		}
 	}
-	usersCacheMutex.RUnlock()
 	return User{}, false
 }
 
