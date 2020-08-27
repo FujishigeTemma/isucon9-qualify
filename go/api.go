@@ -229,11 +229,11 @@ func APIAuthCheck(body *io.ReadCloser) (*LoginRes, int) {
 	}
 	defer res.Body.Close()
 
-	res := LoginRes{}
-	if err = json.NewDecoder(res.Body).Decode(&res); err != nil {
+	loginRes := LoginRes{}
+	if err = json.NewDecoder(res.Body).Decode(&loginRes); err != nil {
 		log.Print(err)
 
-		return &LoginRes{}, http.StatusInternalServerError
+		return &loginRes, http.StatusInternalServerError
 	}
-	return &res, res.StatusCode
+	return &loginRes, res.StatusCode
 }
