@@ -24,6 +24,7 @@ import (
 	goji "goji.io"
 	"goji.io/pat"
 	"golang.org/x/crypto/bcrypt"
+	"github.com/quasoft/memstore"
 )
 
 var json = jsoniter.Config{
@@ -310,7 +311,7 @@ type resSetting struct {
 }
 
 func init() {
-	store = sessions.NewCookieStore([]byte("abc"))
+	store = memstore.NewMemStore([]byte("abc"), []byte("abc"))
 
 	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
 }
