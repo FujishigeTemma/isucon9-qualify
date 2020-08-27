@@ -8,4 +8,5 @@ require (
 	github.com/json-iterator/go v1.1.10
 	goji.io v2.0.2+incompatible
 	golang.org/x/crypto v0.0.0-20200728195943-123391ffb6de
+	golang.org/x/sync v0.0.0-20200625203802-6e8e738ad208
 )

@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"internal/singleflight"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -24,10 +23,11 @@ import (
 	goji "goji.io"
 	"goji.io/pat"
 	"golang.org/x/crypto/bcrypt"
+	"golang.org/x/sync/singleflight"
 )
 
 var json = jsoniter.Config{
-	EscapeHTML: false,
+	EscapeHTML:                    false,
 	ObjectFieldMustBeSimpleString: true,
 }.Froze()
 
@@ -1239,7 +1239,7 @@ func getItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	itemERaw, err, _ := itemSingleFlight.Do(itemIDStr, func () (interface{}, error) {
+	itemERaw, err, _ := itemSingleFlight.Do(itemIDStr, func() (interface{}, error) {
 		itemE := itemEPool.Get()
 		rows := "i.id AS `i.id`, i.seller_id AS `i.seller_id`, i.buyer_id AS `i.buyer_id`, i.status AS `i.status`, i.name AS `i.name`, i.price AS `i.price`, i.description AS `i.description`, i.image_name AS `i.image_name`, i.category_id AS `i.category_id`, te.id AS `te_id`, te.status AS `te_status`, s.status AS `s_status`"
 		err = dbx.Get(itemE, "SELECT "+rows+" FROM `items` AS `i` LEFT JOIN `transaction_evidences` AS `te` ON `te`.`item_id` = `i`.`id` LEFT JOIN `shippings` AS `s` ON `s`.`transaction_evidence_id` = `te`.`id` WHERE `i`.`id` = ?", itemID)
@@ -2356,8 +2356,8 @@ func postLogin(w http.ResponseWriter, r *http.Request) {
 	//	return
 	//}
 
-	setSession(w, SessionData {
-		UserID: user.ID,
+	setSession(w, SessionData{
+		UserID:    user.ID,
 		CsrfToken: secureRandomStr(20),
 	})
 
@@ -2423,8 +2423,8 @@ func postRegister(w http.ResponseWriter, r *http.Request) {
 	usersCache[userID] = u
 	usersCacheMutex.Unlock()
 
-	setSession(w, SessionData {
-		UserID: u.ID,
+	setSession(w, SessionData{
+		UserID:    u.ID,
 		CsrfToken: secureRandomStr(20),
 	})
 
