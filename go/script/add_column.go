@@ -48,7 +48,7 @@ var categoryRe = regexp.MustCompile(`\.jpg', (\d+), `)
 func addParentCategoryId(itemString string) string {
 	categoryID := categoryRe.FindStringSubmatch(itemString)[1]
 	parentCategoryID := getParentCategory(categoryID)
-	return categoryRe.ReplaceAllString(itemString, ".jpg, " + categoryID + ", " + parentCategoryID + ", ")
+	return categoryRe.ReplaceAllString(itemString, ".jpg', " + categoryID + ", " + parentCategoryID + ", ")
 }
 
 func getParentCategory(categoryID string) string {
