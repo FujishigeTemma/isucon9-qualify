@@ -69,6 +69,7 @@ var (
 	categoryCache            map[int]Category
 	childCategoriesCache     map[int][]int
 	doneTransactionEvidences map[int64]struct{}
+	moneylessUsers           map[int64]struct{}
 	buyingMutexMap           BuyingMutexMap
 	itemsPool                = NewItemsPool(ItemsPerPage + 1)
 	itemsTPool               = NewItemsPool(TransactionsPerPage + 1)
@@ -458,6 +459,7 @@ func postInitialize(w http.ResponseWriter, r *http.Request) {
 
 	// キャッシュのリセット
 	doneTransactionEvidences = make(map[int64]struct{}, 100)
+	moneylessUsers = make(map[int64]struct{}, 100)
 	buyingMutexMap = NewBuyingMutexMap()
 
 	// configのメモリキャッシュ
@@ -1597,6 +1599,12 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 		buyingMutexMap.SetFailure(itemID)
 		return
 	}
+	if _, ok := moneylessUsers[buyer.ID]; !ok {
+		outputErrorMsg(w, http.StatusBadRequest, "カード情報に誤りがあるか残高不足です")
+		tx.Rollback()
+		buyingMutexMap.SetFailure(itemID)
+		return
+	}
 
 	// addressとnameは書き変わらないのでRLockでとる
 	sellar, ok := readUserFromCache(item.SellerID)
@@ -1723,6 +1731,7 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 		outputErrorMsg(w, http.StatusBadRequest, "カード情報に誤りがあります")
 		tx.Rollback()
 		buyingMutexMap.SetFailure(itemID)
+		moneylessUsers[buyer.ID] = struct{}{}
 		return
 	}
 
@@ -1730,6 +1739,7 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 		outputErrorMsg(w, http.StatusBadRequest, "カードの残高が足りません")
 		tx.Rollback()
 		buyingMutexMap.SetFailure(itemID)
+		moneylessUsers[buyer.ID] = struct{}{}
 		return
 	}
 
