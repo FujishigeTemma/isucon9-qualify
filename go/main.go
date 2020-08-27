@@ -491,8 +491,8 @@ func postInitialize(w http.ResponseWriter, r *http.Request) {
 	}
 	for _, c := range categoryCache {
 		if c.ParentID != 0 {
-			parentCategory := categoryCache[c.ParentID]
-			c.ParentCategoryName = parentCategory.CategoryName
+			c.ParentCategoryName = categoryCache[c.ParentID].CategoryName
+			categoryCache[c.ID] = c
 		}
 	}
 	childCategoriesCache = make(map[int][]int)
