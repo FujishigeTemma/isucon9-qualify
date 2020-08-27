@@ -24,10 +24,11 @@ import (
 	goji "goji.io"
 	"goji.io/pat"
 	"golang.org/x/crypto/bcrypt"
+	"github.com/quasoft/memstore"
 )
 
 var json = jsoniter.Config{
-	EscapeHTML:                    false,
+	EscapeHTML: false,
 	ObjectFieldMustBeSimpleString: true,
 }.Froze()
 
@@ -67,8 +68,7 @@ const (
 
 var (
 	dbx                      *sqlx.DB
-	sess                     sessions.Store
-	store                    = NewSessionStore()
+	store                    sessions.Store
 	categoryCache            map[int]Category
 	childCategoriesCache     map[int][]int
 	doneTransactionEvidences map[int64]struct{}
@@ -89,36 +89,6 @@ func readUserFromCache(userID int64) (User, bool) {
 	user, ok := usersCache[userID]
 	usersCacheMutex.RUnlock()
 	return user, ok
-}
-
-type SessionStore struct {
-	mp map[string]SessionData
-	mu sync.RWMutex
-}
-
-func NewSessionStore() SessionStore {
-	return SessionStore{
-		mp: make(map[string]SessionData),
-		mu: sync.RWMutex{},
-	}
-}
-func (s *SessionStore) Get(key string) (SessionData, bool) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	v, ok := s.mp[key]
-	return v, ok
-}
-func (s *SessionStore) Set(key string, value SessionData) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	s.mp[key] = value
-}
-
-type SessionData struct {
-	UserID    int64
-	CsrfToken string
 }
 
 type User struct {
@@ -341,7 +311,7 @@ type resSetting struct {
 }
 
 func init() {
-	sess = sessions.NewCookieStore([]byte("abc"))
+	store = memstore.NewMemStore([]byte("key"), []byte("key1234123456789"))
 
 	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
 }
@@ -422,27 +392,29 @@ func main() {
 }
 
 func getSession(r *http.Request) *sessions.Session {
-	session, _ := sess.Get(r, sessionName)
+	session, _ := store.Get(r, sessionName)
 
 	return session
 }
 
 func getCSRFToken(r *http.Request) string {
 	session := getSession(r)
-	data, ok := store.Get(session.ID)
+
+	csrfToken, ok := session.Values["csrf_token"]
 	if !ok {
 		return ""
 	}
-	return data.CsrfToken
+
+	return csrfToken.(string)
 }
 
 func getUser(r *http.Request) (user User, errCode int, errMsg string) {
 	session := getSession(r)
-	data, ok := store.Get(session.ID)
+	userIDRaw, ok := session.Values["user_id"]
 	if !ok {
 		return user, http.StatusNotFound, "no session"
 	}
-	userID := data.UserID
+	userID := userIDRaw.(int64)
 
 	user, ok = readUserFromCache(userID)
 	if !ok {
@@ -454,12 +426,12 @@ func getUser(r *http.Request) (user User, errCode int, errMsg string) {
 
 func getUserID(r *http.Request) (userID int64, errCode int, errMsg string) {
 	session := getSession(r)
-	data, ok := store.Get(session.ID)
+	userIDRaw, ok := session.Values["user_id"]
 	if !ok {
 		return 0, http.StatusNotFound, "no session"
 	}
 
-	return data.UserID, http.StatusOK, ""
+	return userIDRaw.(int64), http.StatusOK, ""
 }
 
 func getUserSimpleByID(q sqlx.Queryer, userID int64) (userSimple UserSimple, err error) {
@@ -2433,11 +2405,8 @@ func postLogin(w http.ResponseWriter, r *http.Request) {
 
 	session := getSession(r)
 
-	store.Set(session.ID, SessionData{
-		UserID:    user.ID,
-		CsrfToken: secureRandomStr(20),
-	})
-
+	session.Values["user_id"] = user.ID
+	session.Values["csrf_token"] = secureRandomStr(20)
 	if err := session.Save(r, w); err != nil {
 		log.Print(err)
 
@@ -2508,11 +2477,8 @@ func postRegister(w http.ResponseWriter, r *http.Request) {
 	usersCacheMutex.Unlock()
 
 	session := getSession(r)
-	store.Set(session.ID, SessionData{
-		UserID:    u.ID,
-		CsrfToken: secureRandomStr(20),
-	})
-
+	session.Values["user_id"] = u.ID
+	session.Values["csrf_token"] = secureRandomStr(20)
 	if err = session.Save(r, w); err != nil {
 		log.Print(err)
 		outputErrorMsg(w, http.StatusInternalServerError, "session error")
