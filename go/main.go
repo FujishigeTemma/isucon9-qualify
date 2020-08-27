@@ -18,7 +18,6 @@ import (
 	_ "net/http/pprof"
 
 	_ "github.com/go-sql-driver/mysql"
-	"github.com/gorilla/sessions"
 	"github.com/jmoiron/sqlx"
 	jsoniter "github.com/json-iterator/go"
 	goji "goji.io"
@@ -67,7 +66,6 @@ const (
 
 var (
 	dbx                      *sqlx.DB
-	store                    sessions.Store
 	categoryCache            map[int]Category
 	childCategoriesCache     map[int][]int
 	doneTransactionEvidences map[int64]struct{}
@@ -310,8 +308,6 @@ type resSetting struct {
 }
 
 func init() {
-	store = sessions.NewCookieStore([]byte("abc"))
-
 	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
 }
 
@@ -390,32 +386,21 @@ func main() {
 	log.Fatal(http.ListenAndServe(":8000", mux))
 }
 
-func getSession(r *http.Request) *sessions.Session {
-	session, _ := store.Get(r, sessionName)
-
-	return session
-}
-
 func getCSRFToken(r *http.Request) string {
-	session := getSession(r)
-
-	csrfToken, ok := session.Values["csrf_token"]
+	data, ok := getSession(r)
 	if !ok {
 		return ""
 	}
-
-	return csrfToken.(string)
+	return data.CsrfToken
 }
 
 func getUser(r *http.Request) (user User, errCode int, errMsg string) {
-	session := getSession(r)
-	userIDRaw, ok := session.Values["user_id"]
+	data, ok := getSession(r)
 	if !ok {
 		return user, http.StatusNotFound, "no session"
 	}
-	userID := userIDRaw.(int64)
 
-	user, ok = readUserFromCache(userID)
+	user, ok = readUserFromCache(data.UserID)
 	if !ok {
 		return user, http.StatusNotFound, "user not found"
 	}
@@ -424,13 +409,12 @@ func getUser(r *http.Request) (user User, errCode int, errMsg string) {
 }
 
 func getUserID(r *http.Request) (userID int64, errCode int, errMsg string) {
-	session := getSession(r)
-	userIDRaw, ok := session.Values["user_id"]
+	data, ok := getSession(r)
 	if !ok {
 		return 0, http.StatusNotFound, "no session"
 	}
 
-	return userIDRaw.(int64), http.StatusOK, ""
+	return data.UserID, http.StatusOK, ""
 }
 
 func getUserSimpleByID(q sqlx.Queryer, userID int64) (userSimple UserSimple, err error) {
@@ -2402,16 +2386,10 @@ func postLogin(w http.ResponseWriter, r *http.Request) {
 	//	return
 	//}
 
-	session := getSession(r)
-
-	session.Values["user_id"] = user.ID
-	session.Values["csrf_token"] = secureRandomStr(20)
-	if err := session.Save(r, w); err != nil {
-		log.Print(err)
-
-		outputErrorMsg(w, http.StatusInternalServerError, "session error")
-		return
-	}
+	setSession(w, SessionData {
+		UserID: user.ID,
+		CsrfToken: secureRandomStr(20),
+	})
 
 	w.Header().Set("Content-Type", "application/json;charset=utf-8")
 	json.NewEncoder(w).Encode(user)
@@ -2475,14 +2453,10 @@ func postRegister(w http.ResponseWriter, r *http.Request) {
 	usersCache[userID] = u
 	usersCacheMutex.Unlock()
 
-	session := getSession(r)
-	session.Values["user_id"] = u.ID
-	session.Values["csrf_token"] = secureRandomStr(20)
-	if err = session.Save(r, w); err != nil {
-		log.Print(err)
-		outputErrorMsg(w, http.StatusInternalServerError, "session error")
-		return
-	}
+	setSession(w, SessionData {
+		UserID: u.ID,
+		CsrfToken: secureRandomStr(20),
+	})
 
 	w.Header().Set("Content-Type", "application/json;charset=utf-8")
 	json.NewEncoder(w).Encode(u)
