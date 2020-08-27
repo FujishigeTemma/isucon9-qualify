@@ -22,6 +22,7 @@ func main() {
 		} else {
 			builder.WriteString(lines[i])
 		}
+		builder.WriteString("\n")
 	}
 	output := builder.String()
 	ioutil.WriteFile("./initial2.sql", []byte(output), 0666)
