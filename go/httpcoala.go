@@ -30,8 +30,6 @@ func coalaRoute(methods ...string) func(next echo.HandlerFunc) echo.HandlerFunc 
 			}
 
 			defer coalescer.Flush(bw, c.Request())
-			c.Response().Writer = bw
-			next(c)
 			return nil
 		}
 	}
