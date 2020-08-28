@@ -1358,7 +1358,10 @@ func getItem(w http.ResponseWriter, r *http.Request) {
 	itemEPool.Put(itemE)
 
 	w.Header().Set("Content-Type", "application/json;charset=utf-8")
-	gojay.NewEncoder(w).Encode(itemDetail)
+	err = gojay.NewEncoder(w).Encode(itemDetail)
+	if err != nil {
+		log.Print(err)
+	}
 }
 
 func postItemEdit(w http.ResponseWriter, r *http.Request) {
