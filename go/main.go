@@ -1654,6 +1654,7 @@ func getQRCode(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "image/png")
+	w.Header().Set("Cache-Control", "max-age=31536000, public")
 	w.Write(teWithS.ImgBinary)
 }
 
