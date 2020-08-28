@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -761,7 +762,8 @@ func getNewItems(w http.ResponseWriter, r *http.Request) {
 }
 
 func getNewCategoryItems(w http.ResponseWriter, r *http.Request) {
-	rootCategoryIDStr := pat.Param(r, "root_category_id")
+	// /new_items/:root_category_id.json
+	rootCategoryIDStr := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/new_items/"), ".json")
 	rootCategoryID, err := strconv.Atoi(rootCategoryIDStr)
 	if err != nil || rootCategoryID <= 0 {
 		outputErrorMsg(w, http.StatusBadRequest, "incorrect category id")
@@ -878,7 +880,8 @@ func getNewCategoryItems(w http.ResponseWriter, r *http.Request) {
 }
 
 func getUserItems(w http.ResponseWriter, r *http.Request) {
-	userIDStr := pat.Param(r, "user_id")
+	// /users/:user_id.json
+	userIDStr := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/users/"), ".json")
 	userID, err := strconv.ParseInt(userIDStr, 10, 64)
 	if err != nil || userID <= 0 {
 		outputErrorMsg(w, http.StatusBadRequest, "incorrect user id")
@@ -1354,7 +1357,8 @@ type ItemE struct {
 }
 
 func getItem(w http.ResponseWriter, r *http.Request) {
-	itemIDStr := pat.Param(r, "item_id")
+	// /items/:item_id.json
+	itemIDStr := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/items/"), ".json")
 	itemID, err := strconv.ParseInt(itemIDStr, 10, 64)
 	if err != nil || itemID <= 0 {
 		outputErrorMsg(w, http.StatusBadRequest, "incorrect item id")
