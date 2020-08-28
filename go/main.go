@@ -82,7 +82,7 @@ var (
 	shipmentServiceURL = DefaultShipmentServiceURL
 )
 
-const UserCacheMapShards = 32
+const UserCacheMapShards = 256
 
 type UserCacheMapShard struct {
 	users map[int64]User
