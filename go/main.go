@@ -18,6 +18,7 @@ import (
 
 	_ "net/http/pprof"
 
+	"github.com/felixge/fgprof"
 	"github.com/francoispqt/gojay"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"
@@ -459,6 +460,7 @@ func main() {
 		password = "isucari"
 	}
 
+	http.DefaultServeMux.Handle("/debug/fgprof", fgprof.Handler())
 	go http.ListenAndServe(":6060", nil)
 
 	dsn := fmt.Sprintf(
