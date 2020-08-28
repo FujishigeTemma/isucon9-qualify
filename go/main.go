@@ -370,6 +370,9 @@ func main() {
 	}
 	defer dbx.Close()
 
+	dbx.SetMaxIdleConns(1024)
+	dbx.SetConnMaxLifetime(0)
+
 	http.DefaultTransport.(*http.Transport).MaxIdleConns = 0
 	http.DefaultTransport.(*http.Transport).MaxIdleConnsPerHost = 1024
 	http.DefaultTransport.(*http.Transport).ForceAttemptHTTP2 = true
