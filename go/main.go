@@ -1161,9 +1161,13 @@ func getTransactionAdditions(tx *sqlx.Tx, w http.ResponseWriter, itemIDs []int64
 			ids = append(ids, tas[i].TransactionEvidenceID)
 		}
 	}
-	shippingStatusMap, hadErr := getShippingStatuses(tx, w, ids)
-	if hadErr {
-		return iMap, true
+
+	shippingStatusMap := make(map[int64]string)
+	if len(ids) > 0 {
+		shippingStatusMap, hadErr = getShippingStatuses(tx, w, ids)
+		if hadErr {
+			return iMap, true
+		}
 	}
 
 	iMap = make(map[int64]TransactionAdditions, len(tas))
