@@ -1252,7 +1252,9 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 
 	itemIds := make([]int64, len(items))
 	for i := range items {
-		itemIds[i] = items[i].ID
+		if items[i].Status != ItemStatusOnSale {
+			itemIds[i] = items[i].ID
+		}
 	}
 
 	transactionAdditions, hadErr := getTransactionAdditions(tx, w, itemIds)
