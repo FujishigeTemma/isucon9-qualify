@@ -2397,8 +2397,8 @@ func postBump(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(&resItemEdit{
 		ItemID:        itemID,
 		ItemPrice:     targetItem.Price,
-		ItemCreatedAt: now.Truncate(time.Microsecond).Unix(),
-		ItemUpdatedAt: now.Truncate(time.Microsecond).Unix(),
+		ItemCreatedAt: now.Truncate(time.Second).Unix(),
+		ItemUpdatedAt: now.Truncate(time.Second).Unix(),
 	})
 }
 
