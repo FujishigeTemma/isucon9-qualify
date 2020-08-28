@@ -86,7 +86,7 @@ const UserCacheMapShards = 32
 
 type UserCacheMapShard struct {
 	users map[int64]User
-	mu    sync.RWMutex
+	sync.RWMutex
 }
 type UserCacheMap []*UserCacheMapShard
 
@@ -108,61 +108,47 @@ func (m UserCacheMap) GetShard(id int64) *UserCacheMapShard {
 }
 func (m UserCacheMap) Get(id int64) (User, bool) {
 	s := m.GetShard(id)
-	u, ok := (*s).Get(id)
+	s.RLock()
+	u, ok := s.users[id]
+	s.RUnlock()
 	return u, ok
 }
 func (m UserCacheMap) Set(id int64, u User) {
 	s := m.GetShard(id)
-	(*s).Set(id, u)
+	s.Lock()
+	s.users[id] = u
+	s.Unlock()
 }
 func (m UserCacheMap) GetByAccountName(name string) (User, bool) {
 	for i := range m {
-		u, ok := m[i].GetByAccountName(name)
-		if ok {
-			return u, ok
+		s := m[i]
+
+		s.RLock()
+		for j := range s.users {
+			if s.users[j].AccountName == name {
+				return s.users[j], true
+			}
 		}
+		s.RUnlock()
 	}
 	return User{}, false
 }
 func (m UserCacheMap) Lock(id int64) {
 	s := m.GetShard(id)
-	s.mu.Lock()
+	s.Lock()
 }
 func (m UserCacheMap) Unlock(id int64) {
 	s := m.GetShard(id)
-	s.mu.Unlock()
+	s.Unlock()
 }
 func (m UserCacheMap) GetWithoutLock(id int64) (User, bool) {
 	s := m.GetShard(id)
-	u, ok := (*s).users[id]
+	u, ok := s.users[id]
 	return u, ok
 }
 func (m UserCacheMap) SetWithoutLock(id int64, u User) {
 	s := m.GetShard(id)
-	(*s).users[id] = u
-}
-
-func (s UserCacheMapShard) Get(id int64) (User, bool) {
-	s.mu.RLock()
-	u, ok := s.users[id]
-	s.mu.RUnlock()
-	return u, ok
-}
-func (s UserCacheMapShard) GetByAccountName(name string) (User, bool) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	for i := range s.users {
-		if s.users[i].AccountName == name {
-			return s.users[i], true
-		}
-	}
-	return User{}, false
-}
-func (s UserCacheMapShard) Set(id int64, u User) {
-	s.mu.Lock()
 	s.users[id] = u
-	s.mu.Unlock()
 }
 
 type User struct {
