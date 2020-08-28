@@ -672,7 +672,7 @@ func getNewItems(w http.ResponseWriter, r *http.Request) {
 	if itemID > 0 && createdAt > 0 {
 		// paging
 		err := dbx.Select(&items,
-			"SELECT id, seller_id, status, name, price, image_name, category_id, created_at FROM `items` WHERE `status` = ? AND (`created_at` < ?  OR (`created_at` = ? AND `id` < ?)) ORDER BY `created_at` DESC LIMIT ?",
+			"SELECT id, seller_id, name, price, image_name, category_id, created_at FROM `items` WHERE `status` = ? AND (`created_at` < ?  OR (`created_at` = ? AND `id` < ?)) ORDER BY `created_at` DESC LIMIT ?",
 			ItemStatusOnSale,
 			time.Unix(createdAt, 0),
 			time.Unix(createdAt, 0),
@@ -687,7 +687,7 @@ func getNewItems(w http.ResponseWriter, r *http.Request) {
 	} else {
 		// 1st page
 		err := dbx.Select(&items,
-			"SELECT id, seller_id, status, name, price, image_name, category_id, created_at FROM `items` WHERE `status` = ? ORDER BY `created_at` DESC LIMIT ?",
+			"SELECT id, seller_id, name, price, image_name, category_id, created_at FROM `items` WHERE `status` = ? ORDER BY `created_at` DESC LIMIT ?",
 			ItemStatusOnSale,
 			ItemsPerPage+1,
 		)
@@ -719,7 +719,7 @@ func getNewItems(w http.ResponseWriter, r *http.Request) {
 			ID:         items[i].ID,
 			SellerID:   items[i].SellerID,
 			Seller:     &seller,
-			Status:     items[i].Status,
+			Status:     ItemStatusOnSale,
 			Name:       items[i].Name,
 			Price:      items[i].Price,
 			ImageURL:   getImageURL(items[i].ImageName),
@@ -793,7 +793,7 @@ func getNewCategoryItems(w http.ResponseWriter, r *http.Request) {
 	if itemID > 0 && createdAt > 0 {
 		// paging
 		err = dbx.Select(&items,
-			"SELECT * FROM `items` WHERE `status` = ? AND `parent_category_id` = ? AND (`created_at` < ?  OR (`created_at` = ? AND `id` < ?)) ORDER BY `created_at` DESC LIMIT ?",
+			"SELECT id, seller_id, name, price, image_name, category_id, created_at FROM `items` WHERE `status` = ? AND `parent_category_id` = ? AND (`created_at` < ?  OR (`created_at` = ? AND `id` < ?)) ORDER BY `created_at` DESC LIMIT ?",
 			ItemStatusOnSale,
 			rootCategoryID,
 			time.Unix(createdAt, 0),
@@ -809,7 +809,7 @@ func getNewCategoryItems(w http.ResponseWriter, r *http.Request) {
 	} else {
 		// 1st page
 		err = dbx.Select(&items,
-			"SELECT * FROM `items` WHERE `status` = ? AND `parent_category_id` = ? ORDER BY created_at DESC LIMIT ?",
+			"SELECT id, seller_id, name, price, image_name, category_id, created_at FROM `items` WHERE `status` = ? AND `parent_category_id` = ? ORDER BY created_at DESC LIMIT ?",
 			ItemStatusOnSale,
 			rootCategoryID,
 			ItemsPerPage+1,
@@ -838,7 +838,7 @@ func getNewCategoryItems(w http.ResponseWriter, r *http.Request) {
 			ID:         items[i].ID,
 			SellerID:   items[i].SellerID,
 			Seller:     &seller,
-			Status:     items[i].Status,
+			Status:     ItemStatusOnSale,
 			Name:       items[i].Name,
 			Price:      items[i].Price,
 			ImageURL:   getImageURL(items[i].ImageName),
@@ -928,7 +928,7 @@ func getUserItems(w http.ResponseWriter, r *http.Request) {
 	if itemID > 0 && createdAt > 0 {
 		// paging
 		err := dbx.Select(&items,
-			"SELECT * FROM `items` WHERE `seller_id` = ? AND (`created_at` < ?  OR (`created_at` = ? AND `id` < ?)) ORDER BY `created_at` DESC LIMIT ?",
+			"SELECT id, status, name, price, image_name, category_id, created_at FROM `items` WHERE `seller_id` = ? AND (`created_at` < ?  OR (`created_at` = ? AND `id` < ?)) ORDER BY `created_at` DESC LIMIT ?",
 			userSimple.ID,
 			time.Unix(createdAt, 0),
 			time.Unix(createdAt, 0),
@@ -943,7 +943,7 @@ func getUserItems(w http.ResponseWriter, r *http.Request) {
 	} else {
 		// 1st page
 		err := dbx.Select(&items,
-			"SELECT * FROM `items` WHERE `seller_id` = ? ORDER BY `created_at` DESC LIMIT ?",
+			"SELECT id, status, name, price, image_name, category_id, created_at FROM `items` WHERE `seller_id` = ? ORDER BY `created_at` DESC LIMIT ?",
 			userSimple.ID,
 			ItemsPerPage+1,
 		)
@@ -963,7 +963,7 @@ func getUserItems(w http.ResponseWriter, r *http.Request) {
 		}
 		itemSimples[i] = &ItemSimple{
 			ID:         items[i].ID,
-			SellerID:   items[i].SellerID,
+			SellerID:   userSimple.ID,
 			Seller:     &userSimple,
 			Status:     items[i].Status,
 			Name:       items[i].Name,
@@ -1370,7 +1370,7 @@ func getItem(w http.ResponseWriter, r *http.Request) {
 	}
 
 	itemE := itemEPool.Get()
-	rows := "i.id AS `i.id`, i.seller_id AS `i.seller_id`, i.buyer_id AS `i.buyer_id`, i.status AS `i.status`, i.name AS `i.name`, i.price AS `i.price`, i.description AS `i.description`, i.image_name AS `i.image_name`, i.category_id AS `i.category_id`, te.id AS `te_id`, te.status AS `te_status`, s.status AS `s_status`"
+	rows := "i.seller_id AS `i.seller_id`, i.buyer_id AS `i.buyer_id`, i.status AS `i.status`, i.name AS `i.name`, i.price AS `i.price`, i.description AS `i.description`, i.image_name AS `i.image_name`, i.category_id AS `i.category_id`, te.id AS `te_id`, te.status AS `te_status`, s.status AS `s_status`"
 	err = dbx.Get(itemE, "SELECT "+rows+" FROM `items` AS `i` LEFT JOIN `transaction_evidences` AS `te` ON `te`.`item_id` = `i`.`id` LEFT JOIN `shippings` AS `s` ON `s`.`transaction_evidence_id` = `te`.`id` WHERE `i`.`id` = ?", itemID)
 	if err == sql.ErrNoRows {
 		outputErrorMsg(w, http.StatusNotFound, "item not found")
@@ -1396,7 +1396,7 @@ func getItem(w http.ResponseWriter, r *http.Request) {
 	}
 
 	itemDetail := ItemDetail{
-		ID:       item.ID,
+		ID:       itemID,
 		SellerID: item.SellerID,
 		Seller:   &seller,
 		// BuyerID
@@ -2340,7 +2340,7 @@ func postBump(w http.ResponseWriter, r *http.Request) {
 	tx := dbx.MustBegin()
 
 	targetItem := Item{}
-	err = tx.Get(&targetItem, "SELECT * FROM `items` WHERE `id` = ? FOR UPDATE", itemID)
+	err = tx.Get(&targetItem, "SELECT seller_id, price, created_at, updated_at FROM `items` WHERE `id` = ? FOR UPDATE", itemID)
 	if err == sql.ErrNoRows {
 		outputErrorMsg(w, http.StatusNotFound, "item not found")
 		tx.Rollback()
@@ -2380,7 +2380,7 @@ func postBump(w http.ResponseWriter, r *http.Request) {
 	_, err = tx.Exec("UPDATE `items` SET `created_at`=?, `updated_at`=? WHERE id=?",
 		now,
 		now,
-		targetItem.ID,
+		itemID,
 	)
 	if err != nil {
 		log.Print(err)
@@ -2403,7 +2403,7 @@ func postBump(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json;charset=utf-8")
 	json.NewEncoder(w).Encode(&resItemEdit{
-		ItemID:        targetItem.ID,
+		ItemID:        itemID,
 		ItemPrice:     targetItem.Price,
 		ItemCreatedAt: targetItem.CreatedAt.Unix(),
 		ItemUpdatedAt: targetItem.UpdatedAt.Unix(),
