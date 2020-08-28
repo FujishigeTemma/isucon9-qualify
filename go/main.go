@@ -26,8 +26,6 @@ import (
 	goji "goji.io"
 	"goji.io/pat"
 	"golang.org/x/crypto/bcrypt"
-	"golang.org/x/net/http2"
-	"golang.org/x/net/http2/h2c"
 )
 
 var json = jsoniter.Config{
@@ -511,9 +509,7 @@ func main() {
 	mux.HandleFunc(pat.Get("/reports.json"), getReports)
 	mux.Use(coala)
 
-	s := &http2.Server{}
-	muxh2c := h2c.NewHandler(mux, s)
-	log.Fatal(http.ListenAndServe(":8000", muxh2c))
+	log.Fatal(http.ListenAndServe(":8000", mux))
 }
 
 func getCSRFToken(r *http.Request) string {
