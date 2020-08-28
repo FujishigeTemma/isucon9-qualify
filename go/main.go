@@ -70,8 +70,7 @@ const (
 
 var (
 	dbx                      *sqlx.DB
-	categoryCache            map[int]Category
-	childCategoriesCache     map[int][]int
+	categories               []Category
 	doneTransactionEvidences map[int64]struct{}
 	buyingMutexMap           BuyingMutexMap
 	itemsPool                = NewItemsPool(ItemsPerPage + 1)
@@ -558,12 +557,13 @@ func getUserSimpleByID(userID int64) (userSimple UserSimple, err error) {
 	return userSimple, nil
 }
 
-func getCategoryByID(categoryID int) (category Category, err error) {
-	category, ok := categoryCache[categoryID]
-	if !ok || category.ID == 0 {
-		return category, errors.New("nothing category")
+func getCategoryByID(categoryID int) (Category, error) {
+	for i := range categories {
+		if categories[i].ID == categoryID {
+			return categories[i], nil
+		}
 	}
-	return category, err
+	return Category{}, errors.New("nothing category")
 }
 
 func postInitialize(w http.ResponseWriter, r *http.Request) {
@@ -597,34 +597,24 @@ func postInitialize(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// categoryのメモリキャッシュ
-	categories := []Category{}
+	categories = []Category{}
 	err = dbx.Select(&categories, "SELECT * FROM `categories`")
 	if err != nil {
 		log.Print(err)
 		outputErrorMsg(w, http.StatusInternalServerError, "category mem cache error")
 		return
 	}
-	categoryCache = make(map[int]Category, len(categories))
-	for _, c := range categories {
-		categoryCache[c.ID] = c
-	}
-	for _, c := range categoryCache {
-		if c.ParentID != 0 {
-			c.ParentCategoryName = categoryCache[c.ParentID].CategoryName
-			categoryCache[c.ID] = c
-		}
-	}
-	childCategoriesCache = make(map[int][]int)
-	for _, c := range categories {
-		if c.ParentID == 0 {
+	for i := range categories {
+		if categories[i].ParentID == 0 {
 			continue
 		}
-		_, ok := childCategoriesCache[c.ParentID]
-		if !ok {
-			childCategoriesCache[c.ParentID] = []int{}
+
+		for j := range categories {
+			if categories[i].ParentID == categories[j].ID {
+				categories[i].ParentCategoryName = categories[j].CategoryName
+				break
+			}
 		}
-		cIDs := childCategoriesCache[c.ParentID]
-		childCategoriesCache[c.ParentID] = append(cIDs, c.ID)
 	}
 
 	// userのメモリキャッシュ
@@ -2433,10 +2423,6 @@ func getSettings(w http.ResponseWriter, r *http.Request) {
 
 	ress.PaymentServiceURL = paymentServiceURL
 
-	categories := make([]Category, 0, len(categoryCache))
-	for i := range categoryCache {
-		categories = append(categories, categoryCache[i])
-	}
 	ress.Categories = categories
 
 	w.Header().Set("Content-Type", "application/json;charset=utf-8")
