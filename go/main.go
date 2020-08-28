@@ -177,6 +177,34 @@ type ItemSimple struct {
 	CreatedAt  int64       `json:"created_at"`
 }
 
+func (i *ItemSimple) MarshalJSONObject(enc *gojay.Encoder) {
+	enc.Int64Key("id", i.ID)
+	enc.Int64Key("seller_id", i.SellerID)
+	enc.ObjectKey("seller", i.Seller)
+	enc.StringKey("status", i.Status)
+	enc.StringKey("name", i.Name)
+	enc.IntKey("price", i.Price)
+	enc.StringKey("image_url", i.ImageURL)
+	enc.IntKey("category_id", i.CategoryID)
+	enc.ObjectKey("category", i.Category)
+	enc.Int64Key("created_at", i.CreatedAt)
+}
+func (i *ItemSimple) IsNil() bool {
+	return i == nil
+}
+
+type ItemSimples []*ItemSimple
+
+// implement MarshalerJSONArray
+func (is *ItemSimples) MarshalJSONArray(enc *gojay.Encoder) {
+	for _, e := range *is {
+		enc.Object(e)
+	}
+}
+func (is *ItemSimples) IsNil() bool {
+	return len(*is) == 0
+}
+
 type ItemDetail struct {
 	ID                        int64       `json:"id"`
 	SellerID                  int64       `json:"seller_id"`
@@ -280,7 +308,17 @@ type resNewItems struct {
 	RootCategoryID   int          `json:"root_category_id,omitempty"`
 	RootCategoryName string       `json:"root_category_name,omitempty"`
 	HasNext          bool         `json:"has_next"`
-	Items            []ItemSimple `json:"items"`
+	Items            *ItemSimples `json:"items"`
+}
+
+func (r *resNewItems) MarshalJSONObject(enc *gojay.Encoder) {
+	enc.IntKeyOmitEmpty("root_category_id", r.RootCategoryID)
+	enc.StringKeyOmitEmpty("root_category_name", r.RootCategoryName)
+	enc.BoolKey("has_next", r.HasNext)
+	enc.ArrayKey("items", r.Items)
+}
+func (c *resNewItems) IsNil() bool {
+	return c == nil
 }
 
 type resUserItems struct {
@@ -643,7 +681,7 @@ func getNewItems(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	itemSimples := make([]ItemSimple, len(items))
+	itemSimples := make(ItemSimples, len(items))
 	if err != nil {
 		outputErrorMsg(w, http.StatusNotFound, "seller not found")
 		return
@@ -660,7 +698,7 @@ func getNewItems(w http.ResponseWriter, r *http.Request) {
 			outputErrorMsg(w, http.StatusNotFound, "category not found")
 			return
 		}
-		itemSimples[i] = ItemSimple{
+		itemSimples[i] = &ItemSimple{
 			ID:         items[i].ID,
 			SellerID:   items[i].SellerID,
 			Seller:     &seller,
@@ -683,12 +721,15 @@ func getNewItems(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rni := resNewItems{
-		Items:   itemSimples,
+		Items:   &itemSimples,
 		HasNext: hasNext,
 	}
 
 	w.Header().Set("Content-Type", "application/json;charset=utf-8")
-	json.NewEncoder(w).Encode(rni)
+	gojay.NewEncoder(w).Encode(&rni)
+	if err != nil {
+		log.Print(err)
+	}
 
 }
 
@@ -759,7 +800,7 @@ func getNewCategoryItems(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	itemSimples := make([]ItemSimple, len(items))
+	itemSimples := make(ItemSimples, len(items))
 
 	for i := range items {
 		seller, err := getUserSimpleByID(items[i].SellerID)
@@ -772,7 +813,7 @@ func getNewCategoryItems(w http.ResponseWriter, r *http.Request) {
 			outputErrorMsg(w, http.StatusNotFound, "category not found")
 			return
 		}
-		itemSimples[i] = ItemSimple{
+		itemSimples[i] = &ItemSimple{
 			ID:         items[i].ID,
 			SellerID:   items[i].SellerID,
 			Seller:     &seller,
@@ -797,12 +838,15 @@ func getNewCategoryItems(w http.ResponseWriter, r *http.Request) {
 	rni := resNewItems{
 		RootCategoryID:   rootCategory.ID,
 		RootCategoryName: rootCategory.CategoryName,
-		Items:            itemSimples,
+		Items:            &itemSimples,
 		HasNext:          hasNext,
 	}
 
 	w.Header().Set("Content-Type", "application/json;charset=utf-8")
-	json.NewEncoder(w).Encode(rni)
+	err = gojay.NewEncoder(w).Encode(&rni)
+	if err != nil {
+		log.Print(err)
+	}
 
 }
 
