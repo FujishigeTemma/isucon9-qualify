@@ -195,7 +195,6 @@ func (i *ItemSimple) IsNil() bool {
 
 type ItemSimples []*ItemSimple
 
-// implement MarshalerJSONArray
 func (is *ItemSimples) MarshalJSONArray(enc *gojay.Encoder) {
 	for _, e := range *is {
 		enc.Object(e)
@@ -244,6 +243,17 @@ func (i *ItemDetail) MarshalJSONObject(enc *gojay.Encoder) {
 }
 func (i *ItemDetail) IsNil() bool {
 	return i == nil
+}
+
+type ItemDetails []*ItemDetail
+
+func (id *ItemDetails) MarshalJSONArray(enc *gojay.Encoder) {
+	for _, e := range *id {
+		enc.Object(e)
+	}
+}
+func (id *ItemDetails) IsNil() bool {
+	return len(*id) == 0
 }
 
 type TransactionEvidence struct {
@@ -317,19 +327,36 @@ func (r *resNewItems) MarshalJSONObject(enc *gojay.Encoder) {
 	enc.BoolKey("has_next", r.HasNext)
 	enc.ArrayKey("items", r.Items)
 }
-func (c *resNewItems) IsNil() bool {
-	return c == nil
+func (r *resNewItems) IsNil() bool {
+	return r == nil
 }
 
 type resUserItems struct {
 	User    *UserSimple  `json:"user"`
 	HasNext bool         `json:"has_next"`
-	Items   []ItemSimple `json:"items"`
+	Items   *ItemSimples `json:"items"`
+}
+
+func (r *resUserItems) MarshalJSONObject(enc *gojay.Encoder) {
+	enc.ObjectKey("user", r.User)
+	enc.BoolKey("has_next", r.HasNext)
+	enc.ArrayKey("items", r.Items)
+}
+func (r *resUserItems) IsNil() bool {
+	return r == nil
 }
 
 type resTransactions struct {
 	HasNext bool         `json:"has_next"`
-	Items   []ItemDetail `json:"items"`
+	Items   *ItemDetails `json:"items"`
+}
+
+func (r *resTransactions) MarshalJSONObject(enc *gojay.Encoder) {
+	enc.BoolKey("has_next", r.HasNext)
+	enc.ArrayKey("items", r.Items)
+}
+func (r *resTransactions) IsNil() bool {
+	return r == nil
 }
 
 type reqRegister struct {
@@ -888,11 +915,14 @@ func getUserItems(w http.ResponseWriter, r *http.Request) {
 	if userSimple.NumSellItems == 0 {
 		rui := resUserItems{
 			User:    &userSimple,
-			Items:   []ItemSimple{},
+			Items:   &ItemSimples{},
 			HasNext: false,
 		}
 		w.Header().Set("Content-Type", "application/json;charset=utf-8")
-		json.NewEncoder(w).Encode(rui)
+		err := gojay.NewEncoder(w).Encode(&rui)
+		if err != nil {
+			log.Print(err)
+		}
 		return
 	}
 
@@ -926,14 +956,14 @@ func getUserItems(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	itemSimples := make([]ItemSimple, len(items))
+	itemSimples := make(ItemSimples, len(items))
 	for i := range items {
 		category, err := getCategoryByID(items[i].CategoryID)
 		if err != nil {
 			outputErrorMsg(w, http.StatusNotFound, "category not found")
 			return
 		}
-		itemSimples[i] = ItemSimple{
+		itemSimples[i] = &ItemSimple{
 			ID:         items[i].ID,
 			SellerID:   items[i].SellerID,
 			Seller:     &userSimple,
@@ -957,13 +987,15 @@ func getUserItems(w http.ResponseWriter, r *http.Request) {
 
 	rui := resUserItems{
 		User:    &userSimple,
-		Items:   itemSimples,
+		Items:   &itemSimples,
 		HasNext: hasNext,
 	}
 
 	w.Header().Set("Content-Type", "application/json;charset=utf-8")
-	json.NewEncoder(w).Encode(rui)
-
+	err = gojay.NewEncoder(w).Encode(&rui)
+	if err != nil {
+		log.Print(err)
+	}
 }
 
 type TransactionAdditions struct {
@@ -1218,7 +1250,7 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	itemDetails := make([]ItemDetail, len(items))
+	itemDetails := make(ItemDetails, len(items))
 	for i := range items {
 		seller, err := getUserSimpleByID(items[i].SellerID)
 		if err != nil {
@@ -1270,7 +1302,7 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 			itemDetail.ShippingStatus = ta.ShippingStatus
 		}
 
-		itemDetails[i] = itemDetail
+		itemDetails[i] = &itemDetail
 	}
 	tx.Commit()
 
@@ -1283,13 +1315,15 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rts := resTransactions{
-		Items:   itemDetails,
+		Items:   &itemDetails,
 		HasNext: hasNext,
 	}
 
 	w.Header().Set("Content-Type", "application/json;charset=utf-8")
-	json.NewEncoder(w).Encode(rts)
-
+	err = gojay.NewEncoder(w).Encode(&rts)
+	if err != nil {
+		log.Print(err)
+	}
 }
 
 type ItemEPool struct {
