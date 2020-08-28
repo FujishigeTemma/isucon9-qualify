@@ -1150,14 +1150,16 @@ func getTransactionAdditions(tx *sqlx.Tx, w http.ResponseWriter, itemIDs []int64
 		tx.Rollback()
 		return iMap, true
 	}
+	// It's able to ignore ErrNoRows
+	if len(tas) <= 0 {
+		return make(map[int64]TransactionAdditions), false
+	}
 
 	ids := make([]int64, 0, len(tas))
 	for i := range tas {
-		ids = append(ids, tas[i].TransactionEvidenceID)
-	}
-	// It's able to ignore ErrNoRows
-	if len(ids) <= 0 {
-		return make(map[int64]TransactionAdditions), false
+		if tas[i].TransactionEvidenceStatus != TransactionEvidenceStatusDone {
+			ids = append(ids, tas[i].TransactionEvidenceID)
+		}
 	}
 	shippingStatusMap, hadErr := getShippingStatuses(tx, w, ids)
 	if hadErr {
@@ -1166,7 +1168,11 @@ func getTransactionAdditions(tx *sqlx.Tx, w http.ResponseWriter, itemIDs []int64
 
 	iMap = make(map[int64]TransactionAdditions, len(tas))
 	for i := range tas {
-		tas[i].ShippingStatus = shippingStatusMap[tas[i].TransactionEvidenceID]
+		if tas[i].TransactionEvidenceStatus != TransactionEvidenceStatusDone {
+			tas[i].ShippingStatus = shippingStatusMap[tas[i].TransactionEvidenceID]
+		} else {
+			tas[i].ShippingStatus = ShippingsStatusDone
+		}
 		iMap[tas[i].ItemID] = tas[i]
 	}
 	return iMap, false
