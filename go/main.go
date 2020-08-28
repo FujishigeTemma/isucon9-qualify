@@ -76,29 +76,93 @@ var (
 	itemsTPool               = NewItemsPool(TransactionsPerPage + 1)
 	itemEPool                = NewItemEPool()
 
-	usersCache      map[int64]User
-	usersCacheMutex sync.RWMutex
+	usersCache = NewUserCacheMap()
 
 	paymentServiceURL  = DefaultPaymentServiceURL
 	shipmentServiceURL = DefaultShipmentServiceURL
 )
 
-func readUserFromCache(userID int64) (User, bool) {
-	usersCacheMutex.RLock()
-	user, ok := usersCache[userID]
-	usersCacheMutex.RUnlock()
-	return user, ok
-}
-func readUserFromCacheByAccountName(accountName string) (User, bool) {
-	usersCacheMutex.RLock()
-	defer usersCacheMutex.RUnlock()
+const UserCacheMapShards = 32
 
-	for i := range usersCache {
-		if usersCache[i].AccountName == accountName {
-			return usersCache[i], true
+type UserCacheMapShard struct {
+	users map[int64]User
+	mu    sync.RWMutex
+}
+type UserCacheMap []*UserCacheMapShard
+
+func NewUserCacheMap() UserCacheMap {
+	m := make(UserCacheMap, UserCacheMapShards)
+	for i := 0; i < UserCacheMapShards; i++ {
+		shard := NewUserCacheMapShard()
+		m[i] = &shard
+	}
+	return m
+}
+func NewUserCacheMapShard() UserCacheMapShard {
+	users := make(map[int64]User, 50)
+	return UserCacheMapShard{users: users}
+}
+
+func (m UserCacheMap) GetShard(id int64) *UserCacheMapShard {
+	return m[id%UserCacheMapShards]
+}
+func (m UserCacheMap) Get(id int64) (User, bool) {
+	s := m.GetShard(id)
+	u, ok := (*s).Get(id)
+	return u, ok
+}
+func (m UserCacheMap) Set(id int64, u User) {
+	s := m.GetShard(id)
+	(*s).Set(id, u)
+}
+func (m UserCacheMap) GetByAccountName(name string) (User, bool) {
+	for i := range m {
+		u, ok := m[i].GetByAccountName(name)
+		if ok {
+			return u, ok
 		}
 	}
 	return User{}, false
+}
+func (m UserCacheMap) Lock(id int64) {
+	s := m.GetShard(id)
+	s.mu.Lock()
+}
+func (m UserCacheMap) Unlock(id int64) {
+	s := m.GetShard(id)
+	s.mu.Unlock()
+}
+func (m UserCacheMap) GetWithoutLock(id int64) (User, bool) {
+	s := m.GetShard(id)
+	u, ok := (*s).users[id]
+	return u, ok
+}
+func (m UserCacheMap) SetWithoutLock(id int64, u User) {
+	s := m.GetShard(id)
+	(*s).users[id] = u
+}
+
+func (s UserCacheMapShard) Get(id int64) (User, bool) {
+	s.mu.RLock()
+	u, ok := s.users[id]
+	s.mu.RUnlock()
+	return u, ok
+}
+func (s UserCacheMapShard) GetByAccountName(name string) (User, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	for i := range s.users {
+		if s.users[i].AccountName == name {
+			return s.users[i], true
+		}
+	}
+	return User{}, false
+}
+func (s UserCacheMapShard) Set(id int64, u User) {
+	s.mu.Lock()
+	s.users[id] = u
+	s.mu.Unlock()
 }
 
 type User struct {
@@ -526,7 +590,7 @@ func getUser(r *http.Request) (user User, errCode int, errMsg string) {
 		return user, http.StatusNotFound, "no session"
 	}
 
-	user, ok = readUserFromCache(data.UserID)
+	user, ok = usersCache.Get(data.UserID)
 	if !ok {
 		return user, http.StatusNotFound, "user not found"
 	}
@@ -544,7 +608,7 @@ func getUserID(r *http.Request) (userID int64, errCode int, errMsg string) {
 }
 
 func getUserSimpleByID(userID int64) (userSimple UserSimple, err error) {
-	user, ok := readUserFromCache(userID)
+	user, ok := usersCache.Get(userID)
 	if !ok {
 		return userSimple, fmt.Errorf("User not found")
 	}
@@ -623,9 +687,9 @@ func postInitialize(w http.ResponseWriter, r *http.Request) {
 		outputErrorMsg(w, http.StatusInternalServerError, "user mem cache error")
 		return
 	}
-	usersCache = make(map[int64]User, len(users))
+	usersCache = NewUserCacheMap()
 	for _, u := range users {
-		usersCache[u.ID] = u
+		usersCache.Set(u.ID, u)
 	}
 
 	campaign, err := strconv.Atoi(os.Getenv("CAMPAIGN"))
@@ -1069,8 +1133,8 @@ func (s *APIShippingStatusMap) Load(key int64) (APIShippingStatus, bool) {
 }
 
 type ShippingSimple struct {
-	TransactionEvidenceID int64     `json:"transaction_evidence_id" db:"transaction_evidence_id"`
-	Status                string    `json:"status" db:"status"`
+	TransactionEvidenceID int64  `json:"transaction_evidence_id" db:"transaction_evidence_id"`
+	Status                string `json:"status" db:"status"`
 }
 
 func getShippingStatuses(tx *sqlx.Tx, w http.ResponseWriter, transactionEvidenceIDs []int64) ([]ShippingSimple, bool) {
@@ -1760,7 +1824,7 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// addressとnameは書き変わらないのでRLockでとる
-	sellar, ok := readUserFromCache(item.SellerID)
+	sellar, ok := usersCache.Get(item.SellerID)
 	if !ok {
 		outputErrorMsg(w, http.StatusNotFound, "sellar not found")
 		tx.Rollback()
@@ -2275,10 +2339,10 @@ func postSell(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	usersCacheMutex.Lock()
-	defer usersCacheMutex.Unlock()
+	usersCache.Lock(userID)
+	defer usersCache.Unlock(userID)
 
-	seller, ok := usersCache[userID]
+	seller, ok := usersCache.GetWithoutLock(userID)
 	if !ok {
 		outputErrorMsg(w, http.StatusNotFound, "user not found")
 		return
@@ -2313,7 +2377,7 @@ func postSell(w http.ResponseWriter, r *http.Request) {
 
 	seller.NumSellItems++
 	seller.LastBump = time.Now()
-	usersCache[seller.ID] = seller
+	usersCache.SetWithoutLock(seller.ID, seller)
 	tx.Commit()
 
 	w.Header().Set("Content-Type", "application/json;charset=utf-8")
@@ -2372,10 +2436,10 @@ func postBump(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	usersCacheMutex.Lock()
-	defer usersCacheMutex.Unlock()
+	usersCache.Lock(userID)
+	defer usersCache.Unlock(userID)
 
-	seller, ok := usersCache[userID]
+	seller, ok := usersCache.GetWithoutLock(userID)
 	if !ok {
 		outputErrorMsg(w, http.StatusNotFound, "user not found")
 		tx.Rollback()
@@ -2402,7 +2466,7 @@ func postBump(w http.ResponseWriter, r *http.Request) {
 	}
 
 	seller.LastBump = now
-	usersCache[seller.ID] = seller
+	usersCache.SetWithoutLock(seller.ID, seller)
 
 	tx.Commit()
 
@@ -2445,7 +2509,7 @@ func postLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, ok := readUserFromCacheByAccountName(res.AccountName)
+	user, ok := usersCache.GetByAccountName(res.AccountName)
 	if !ok {
 		outputErrorMsg(w, http.StatusInternalServerError, "user not found by account_name")
 		return
@@ -2555,9 +2619,7 @@ func postRegister(w http.ResponseWriter, r *http.Request) {
 		Address:     address,
 	}
 
-	usersCacheMutex.Lock()
-	usersCache[userID] = u
-	usersCacheMutex.Unlock()
+	usersCache.Set(userID, u)
 
 	setSession(w, SessionData{
 		UserID:    u.ID,
