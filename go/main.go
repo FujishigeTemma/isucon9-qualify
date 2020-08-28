@@ -126,6 +126,7 @@ func (m UserCacheMap) GetByAccountName(name string) (User, bool) {
 		s.RLock()
 		for j := range s.users {
 			if s.users[j].AccountName == name {
+				s.RUnlock()
 				return s.users[j], true
 			}
 		}
