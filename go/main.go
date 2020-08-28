@@ -1068,34 +1068,36 @@ func (s *APIShippingStatusMap) Load(key int64) (APIShippingStatus, bool) {
 	return v.(APIShippingStatus), ok
 }
 
-func getShippingStatuses(tx *sqlx.Tx, w http.ResponseWriter, transactionEvidenceIDs []int64) (ssMap map[int64]string, hadErr bool) {
+type ShippingSimple struct {
+	TransactionEvidenceID int64     `json:"transaction_evidence_id" db:"transaction_evidence_id"`
+	Status                string    `json:"status" db:"status"`
+}
+
+func getShippingStatuses(tx *sqlx.Tx, w http.ResponseWriter, transactionEvidenceIDs []int64) ([]ShippingSimple, bool) {
 	query, args, err := sqlx.In("SELECT transaction_evidence_id, status FROM `shippings` WHERE `transaction_evidence_id` IN (?)", transactionEvidenceIDs)
 	if err != nil {
 		log.Print(err)
 		outputErrorMsg(w, http.StatusInternalServerError, "query error")
 		tx.Rollback()
-		return ssMap, true
+		return []ShippingSimple{}, true
 	}
 	query = dbx.Rebind(query)
 
-	shippings := make([]Shipping, 0, len(transactionEvidenceIDs))
+	shippings := make([]ShippingSimple, 0, len(transactionEvidenceIDs))
 	err = sqlx.Select(tx, &shippings, query, args...)
 	if err == sql.ErrNoRows {
 		outputErrorMsg(w, http.StatusNotFound, "shipping not found")
 		tx.Rollback()
-		return ssMap, true
+		return shippings, true
 	}
 	if err != nil {
 		log.Print(err)
 		outputErrorMsg(w, http.StatusInternalServerError, "db error")
 		tx.Rollback()
-		return ssMap, true
+		return shippings, true
 	}
 
-	ssMap = make(map[int64]string, len(shippings))
-	for i := range shippings {
-		ssMap[shippings[i].TransactionEvidenceID] = shippings[i].Status
-	}
+	return shippings, false
 
 	/*
 		resMap := NewAPIShippingStatusMap()
@@ -1128,17 +1130,15 @@ func getShippingStatuses(tx *sqlx.Tx, w http.ResponseWriter, transactionEvidence
 			}
 		}
 	*/
-
-	return ssMap, false
 }
 
-func getTransactionAdditions(tx *sqlx.Tx, w http.ResponseWriter, itemIDs []int64) (iMap map[int64]TransactionAdditions, hadErr bool) {
+func getTransactionAdditions(tx *sqlx.Tx, w http.ResponseWriter, itemIDs []int64) ([]TransactionAdditions, bool) {
 	query, args, err := sqlx.In("SELECT id, status, item_id FROM `transaction_evidences` WHERE `item_id` IN (?)", itemIDs)
 	if err != nil {
 		log.Print(err)
 		outputErrorMsg(w, http.StatusInternalServerError, "query error")
 		tx.Rollback()
-		return iMap, true
+		return []TransactionAdditions{}, true
 	}
 	query = dbx.Rebind(query)
 
@@ -1148,11 +1148,11 @@ func getTransactionAdditions(tx *sqlx.Tx, w http.ResponseWriter, itemIDs []int64
 		log.Print(err)
 		outputErrorMsg(w, http.StatusInternalServerError, "db error")
 		tx.Rollback()
-		return iMap, true
+		return tas, true
 	}
 	// It's able to ignore ErrNoRows
 	if len(tas) <= 0 {
-		return make(map[int64]TransactionAdditions), false
+		return tas, false
 	}
 
 	ids := make([]int64, 0, len(tas))
@@ -1162,24 +1162,28 @@ func getTransactionAdditions(tx *sqlx.Tx, w http.ResponseWriter, itemIDs []int64
 		}
 	}
 
-	shippingStatusMap := make(map[int64]string)
+	shippings := make([]ShippingSimple, 0)
 	if len(ids) > 0 {
-		shippingStatusMap, hadErr = getShippingStatuses(tx, w, ids)
+		var hadErr bool
+		shippings, hadErr = getShippingStatuses(tx, w, ids)
 		if hadErr {
-			return iMap, true
+			return tas, true
 		}
 	}
 
-	iMap = make(map[int64]TransactionAdditions, len(tas))
 	for i := range tas {
 		if tas[i].TransactionEvidenceStatus != TransactionEvidenceStatusDone {
-			tas[i].ShippingStatus = shippingStatusMap[tas[i].TransactionEvidenceID]
+			for j := range shippings {
+				if tas[i].TransactionEvidenceID == shippings[j].TransactionEvidenceID {
+					tas[i].ShippingStatus = shippings[j].Status
+					break
+				}
+			}
 		} else {
 			tas[i].ShippingStatus = ShippingsStatusDone
 		}
-		iMap[tas[i].ItemID] = tas[i]
 	}
-	return iMap, false
+	return tas, false
 }
 
 func getTransactions(w http.ResponseWriter, r *http.Request) {
@@ -1301,11 +1305,12 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 			itemDetail.Buyer = &buyer
 		}
 
-		ta, exists := transactionAdditions[items[i].ID]
-		if exists && ta.TransactionEvidenceID > 0 {
-			itemDetail.TransactionEvidenceID = ta.TransactionEvidenceID
-			itemDetail.TransactionEvidenceStatus = ta.TransactionEvidenceStatus
-			itemDetail.ShippingStatus = ta.ShippingStatus
+		for j := range transactionAdditions {
+			if items[i].ID == transactionAdditions[j].ItemID {
+				itemDetail.TransactionEvidenceID = transactionAdditions[j].TransactionEvidenceID
+				itemDetail.TransactionEvidenceStatus = transactionAdditions[j].TransactionEvidenceStatus
+				itemDetail.ShippingStatus = transactionAdditions[j].ShippingStatus
+			}
 		}
 
 		itemDetails[i] = &itemDetail
