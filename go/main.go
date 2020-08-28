@@ -18,6 +18,7 @@ import (
 
 	_ "net/http/pprof"
 
+	"github.com/francoispqt/gojay"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"
 	jsoniter "github.com/json-iterator/go"
@@ -118,6 +119,15 @@ type UserSimple struct {
 	NumSellItems int    `json:"num_sell_items" db:"num_sell_items"`
 }
 
+func (u *UserSimple) MarshalJSONObject(enc *gojay.Encoder) {
+	enc.Int64Key("id", u.ID)
+	enc.StringKey("account_name", u.AccountName)
+	enc.IntKey("num_sell_items", u.NumSellItems)
+}
+func (u *UserSimple) IsNil() bool {
+	return u == nil
+}
+
 type ItemsPool struct {
 	p sync.Pool
 }
@@ -186,6 +196,28 @@ type ItemDetail struct {
 	CreatedAt                 int64       `json:"created_at"`
 }
 
+func (i *ItemDetail) MarshalJSONObject(enc *gojay.Encoder) {
+	enc.Int64Key("id", i.ID)
+	enc.Int64Key("seller_id", i.SellerID)
+	enc.ObjectKey("seller", i.Seller)
+	enc.Int64KeyOmitEmpty("buyer_id", i.BuyerID)
+	enc.ObjectKeyOmitEmpty("buyer", i.Buyer)
+	enc.StringKey("status", i.Status)
+	enc.StringKey("name", i.Name)
+	enc.IntKey("price", i.Price)
+	enc.StringKey("description", i.Description)
+	enc.StringKey("image_url", i.ImageURL)
+	enc.IntKey("category_id", i.CategoryID)
+	enc.ObjectKey("category", i.Category)
+	enc.Int64KeyOmitEmpty("transaction_evidence_id", i.TransactionEvidenceID)
+	enc.StringKeyOmitEmpty("transaction_evidence_status", i.TransactionEvidenceStatus)
+	enc.StringKeyOmitEmpty("shipping_status", i.ShippingStatus)
+	enc.Int64Key("created_at", i.CreatedAt)
+}
+func (i *ItemDetail) IsNil() bool {
+	return i == nil
+}
+
 type TransactionEvidence struct {
 	ID                 int64     `json:"id" db:"id"`
 	SellerID           int64     `json:"seller_id" db:"seller_id"`
@@ -222,6 +254,16 @@ type Category struct {
 	ParentID           int    `json:"parent_id" db:"parent_id"`
 	CategoryName       string `json:"category_name" db:"category_name"`
 	ParentCategoryName string `json:"parent_category_name,omitempty" db:"-"`
+}
+
+func (c *Category) MarshalJSONObject(enc *gojay.Encoder) {
+	enc.IntKey("id", c.ID)
+	enc.IntKey("parent_id", c.ParentID)
+	enc.StringKey("category_name", c.CategoryName)
+	enc.StringKeyOmitEmpty("parent_category_name", c.ParentCategoryName)
+}
+func (c *Category) IsNil() bool {
+	return c == nil
 }
 
 type reqInitialize struct {
@@ -1316,7 +1358,7 @@ func getItem(w http.ResponseWriter, r *http.Request) {
 	itemEPool.Put(itemE)
 
 	w.Header().Set("Content-Type", "application/json;charset=utf-8")
-	json.NewEncoder(w).Encode(itemDetail)
+	gojay.NewEncoder(w).Encode(itemDetail)
 }
 
 func postItemEdit(w http.ResponseWriter, r *http.Request) {
@@ -2365,7 +2407,6 @@ func postLogin(w http.ResponseWriter, r *http.Request) {
 	//	outputErrorMsg(w, http.StatusInternalServerError, "crypt error")
 	//	return
 	//}
-
 
 	setSession(w, SessionData{
 		UserID:    user.ID,
