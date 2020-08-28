@@ -2186,6 +2186,11 @@ func postSell(w http.ResponseWriter, r *http.Request) {
 	priceStr := r.FormValue("price")
 	categoryIDStr := r.FormValue("category_id")
 
+	if name == "" || description == "" || priceStr == "" || categoryIDStr == "" {
+		outputErrorMsg(w, http.StatusBadRequest, "all parameters are required")
+		return
+	}
+
 	f, header, err := r.FormFile("image")
 	if err != nil {
 		log.Print(err)
@@ -2200,26 +2205,19 @@ func postSell(w http.ResponseWriter, r *http.Request) {
 	}
 
 	categoryID, err := strconv.Atoi(categoryIDStr)
-	if err != nil || categoryID < 0 {
+	if err != nil || categoryID <= 0 {
 		outputErrorMsg(w, http.StatusBadRequest, "category id error")
 		return
 	}
 
 	price, err := strconv.Atoi(priceStr)
-	if err != nil {
+	if err != nil || price == 0 {
 		outputErrorMsg(w, http.StatusBadRequest, "price error")
-		return
-	}
-
-	if name == "" || description == "" || price == 0 || categoryID == 0 {
-		outputErrorMsg(w, http.StatusBadRequest, "all parameters are required")
-
 		return
 	}
 
 	if price < ItemMinPrice || price > ItemMaxPrice {
 		outputErrorMsg(w, http.StatusBadRequest, ItemPriceErrMsg)
-
 		return
 	}
 
