@@ -138,9 +138,21 @@ func (m UserCacheMap) Lock(id int64) {
 	s := m.GetShard(id)
 	s.Lock()
 }
+func (m UserCacheMap) LockAll() {
+	for i := range m {
+		s := m[i]
+		s.Lock()
+	}
+}
 func (m UserCacheMap) Unlock(id int64) {
 	s := m.GetShard(id)
 	s.Unlock()
+}
+func (m UserCacheMap) UnlockAll() {
+	for i := range m {
+		s := m[i]
+		s.Unlock()
+	}
 }
 func (m UserCacheMap) GetWithoutLock(id int64) (User, bool) {
 	s := m.GetShard(id)
@@ -675,9 +687,11 @@ func postInitialize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	usersCache = NewUserCacheMap()
+	usersCache.LockAll()
 	for _, u := range users {
-		usersCache.Set(u.ID, u)
+		usersCache.SetWithoutLock(u.ID, u)
 	}
+	usersCache.UnlockAll()
 
 	campaign, err := strconv.Atoi(os.Getenv("CAMPAIGN"))
 	if err != nil {
