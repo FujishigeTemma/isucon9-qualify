@@ -6,32 +6,54 @@ import (
 )
 
 const cookieName = "session"
+const SessionStoreShards = 256
 
 var store = NewSessionStore()
 
-type SessionStore struct {
+type SessionStoreShard struct {
 	mp map[string]SessionData
-	mu sync.RWMutex
+	sync.RWMutex
 }
+type SessionStore []*SessionStoreShard
 
 func NewSessionStore() SessionStore {
-	return SessionStore{
-		mp: make(map[string]SessionData),
-		mu: sync.RWMutex{},
+	m := make(SessionStore, SessionStoreShards)
+	for i := 0; i < UserCacheMapShards; i++ {
+		shard := NewSessionStoreShard()
+		m[i] = &shard
 	}
+	return m
 }
-func (s *SessionStore) Get(key string) (SessionData, bool) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	v, ok := s.mp[key]
-	return v, ok
+func NewSessionStoreShard() SessionStoreShard {
+	mp := make(map[string]SessionData, 50)
+	return SessionStoreShard{mp: mp}
 }
-func (s *SessionStore) Set(key string, value SessionData) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
 
-	s.mp[key] = value
+func (s SessionStore) GetShard(key string) *SessionStoreShard {
+	return s[uint(fnv32(key))%uint(SessionStoreShards)]
+}
+func (s SessionStore) Get(key string) (SessionData, bool) {
+	sh := s.GetShard(key)
+	sh.RLock()
+	d, ok := sh.mp[key]
+	sh.RUnlock()
+	return d, ok
+}
+func (s SessionStore) Set(key string, d SessionData) {
+	sh := s.GetShard(key)
+	sh.Lock()
+	sh.mp[key] = d
+	sh.Unlock()
+}
+
+func fnv32(key string) uint32 {
+	hash := uint32(2166136261)
+	const prime32 = uint32(16777619)
+	for i := 0; i < len(key); i++ {
+		hash *= prime32
+		hash ^= uint32(key[i])
+	}
+	return hash
 }
 
 type SessionData struct {
