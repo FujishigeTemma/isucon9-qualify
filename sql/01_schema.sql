@@ -4,7 +4,7 @@ DROP TABLE IF EXISTS `configs`;
 CREATE TABLE configs (
     `name` VARCHAR(191) NOT NULL PRIMARY KEY,
     `val` VARCHAR(255) NOT NULL
-) ENGINE=InnoDB DEFAULT CHARACTER SET utf8mb4;
+) ENGINE=InnoDB DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_bin;
 
 DROP TABLE IF EXISTS `users`;
 CREATE TABLE `users` (
@@ -15,7 +15,7 @@ CREATE TABLE `users` (
   `num_sell_items` int unsigned NOT NULL DEFAULT 0,
   `last_bump` datetime NOT NULL DEFAULT '2000-01-01 00:00:00',
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP
-) ENGINE=InnoDB DEFAULT CHARACTER SET utf8mb4;
+) ENGINE=InnoDB DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_bin;
 
 DROP TABLE IF EXISTS `items`;
 CREATE TABLE `items` (
@@ -37,7 +37,7 @@ CREATE TABLE `items` (
   INDEX mul_idx_buyer_id_created_at (`buyer_id`, `created_at`),
   INDEX mul_idx_status_created_at (`status`, `created_at`),
   INDEX mul_idx_status_parent_category_id_created_at (`status`, `parent_category_id`, `created_at`)
-) ENGINE=InnoDB DEFAULT CHARACTER SET utf8mb4;
+) ENGINE=InnoDB DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_bin;
 
 DROP TABLE IF EXISTS `transaction_evidences`;
 CREATE TABLE `transaction_evidences` (
@@ -53,7 +53,7 @@ CREATE TABLE `transaction_evidences` (
   `item_root_category_id` int unsigned NOT NULL,
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP
-) ENGINE=InnoDB DEFAULT CHARACTER SET utf8mb4;
+) ENGINE=InnoDB DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_bin;
 
 DROP TABLE IF EXISTS `shippings`;
 CREATE TABLE `shippings` (
@@ -70,11 +70,11 @@ CREATE TABLE `shippings` (
   `img_binary` mediumblob NOT NULL,
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP
-) ENGINE=InnoDB DEFAULT CHARACTER SET utf8mb4;
+) ENGINE=InnoDB DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_bin;
 
 DROP TABLE IF EXISTS `categories`;
 CREATE TABLE `categories` (
   `id` int unsigned NOT NULL AUTO_INCREMENT PRIMARY KEY,
   `parent_id` int unsigned NOT NULL,
   `category_name` varchar(191) NOT NULL
-) ENGINE=InnoDB DEFAULT CHARACTER SET utf8mb4;
+) ENGINE=InnoDB DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_bin;
