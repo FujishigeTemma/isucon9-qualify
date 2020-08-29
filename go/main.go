@@ -573,7 +573,7 @@ func main() {
 	mux.HandleFunc(pat.Get("/reports.json"), getReports)
 	mux.Use(coala)
 
-	listener, err := net.Listen("unix", "/var/run/isucari.sock")
+	listener, err := net.Listen("unix", "/var/run/go/isucari.sock")
 	if err != nil {
 		log.Fatalf("error: %v", err)
 	}
