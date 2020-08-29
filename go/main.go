@@ -8,12 +8,15 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"strconv"
 	"sync"
+	"syscall"
 	"time"
 
 	_ "net/http/pprof"
@@ -570,7 +573,32 @@ func main() {
 	mux.HandleFunc(pat.Get("/reports.json"), getReports)
 	mux.Use(coala)
 
-	log.Fatal(http.ListenAndServe(":8000", mux))
+	listener, err := net.Listen("unix", "/home/isucon/isucari.sock")
+	if err != nil {
+		log.Fatalf("error: %v", err)
+	}
+	defer func() {
+		if err := listener.Close(); err != nil {
+			log.Printf("error: %v", err)
+		}
+	}()
+
+	shutdown(listener)
+	if err := http.Serve(listener, mux); err != nil {
+		log.Fatalf("error: %v", err)
+	}
+}
+
+func shutdown(listener net.Listener) {
+	c := make(chan os.Signal, 2)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-c
+		if err := listener.Close(); err != nil {
+			log.Printf("error: %v", err)
+		}
+		os.Exit(1)
+	}()
 }
 
 func getCSRFToken(r *http.Request) string {
