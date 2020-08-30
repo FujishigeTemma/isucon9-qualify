@@ -23,11 +23,11 @@ func main() {
 		if strings.HasPrefix(lines[i], "INSERT INTO") && str != "" {
 			switch flag {
 				case "items":
-					builder.WriteString(addParentCategoryIds(lines[i]))
+					builder.WriteString(addParentCategoryIds(str))
 				case "transaction_evidences":
-					builder.WriteString(changeDBSchema(lines[i], prefixBeforeRemoveTransactionEvidenceColumns, prefixAfterRemoveTransactionEvidenceColumns))
+					builder.WriteString(changeDBSchema(str, prefixBeforeRemoveTransactionEvidenceColumns, prefixAfterRemoveTransactionEvidenceColumns))
 				case "shippings":
-					builder.WriteString(changeDBSchema(lines[i], prefixBeforeRemoveShippingColumns, prefixAfterRemoveShippingColumns))
+					builder.WriteString(changeDBSchema(str, prefixBeforeRemoveShippingColumns, prefixAfterRemoveShippingColumns))
 				default:
 					builder.WriteString(str)
 			}
