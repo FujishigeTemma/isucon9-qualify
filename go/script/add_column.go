@@ -1,4 +1,4 @@
-package sub
+package main
 
 import (
 	"io/ioutil"
@@ -7,7 +7,7 @@ import (
 )
 
 func main() {
-	bytes, err := ioutil.ReadFile("./initial.sql")
+	bytes, err := ioutil.ReadFile("./initial.sql.bk")
 	if err != nil {
 		panic(err)
 	}
@@ -22,7 +22,7 @@ func main() {
 		if strings.HasPrefix(lines[i], "INSERT INTO") && str != "" {
 			switch flag {
 				case "items":
-					builder.WriteString(addParentCategoryIds(str))
+					builder.WriteString(addParentCategoryIds(lines[i]))
 				case "transaction_evidences":
 					builder.WriteString(changeDBSchema(str, prefixBeforeRemoveTransactionEvidenceColumns, prefixAfterRemoveTransactionEvidenceColumns))
 				case "shippings":
@@ -32,7 +32,7 @@ func main() {
 			}
 			str = ""
 		}
-		str += lines[i]
+		str += lines[i] + "\n"
 		if strings.HasPrefix(lines[i], "INSERT INTO") {
 			if strings.HasPrefix(lines[i], "INSERT INTO `items` ") {
 				flag = "items"
@@ -60,7 +60,7 @@ func main() {
 		}
 	}
 	output := builder.String()
-	ioutil.WriteFile("./initial2.sql", []byte(output), 0666)
+	ioutil.WriteFile("./initial.sql", []byte(output), 0666)
 }
 
 const prefixBeforeAddParentCategoryIds = "INSERT INTO `items` (`id`,`seller_id`,`buyer_id`,`status`,`name`,`price`,`description`,`image_name`,`category_id`,`created_at`,`updated_at`) VALUES "
