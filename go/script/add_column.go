@@ -18,7 +18,7 @@ func main() {
 	var builder strings.Builder
 	for i := range lines {
 		if strings.HasPrefix(lines[i], "INSERT INTO `items` ") {
-			builder.WriteString(changeDBSchema(lines[i], prefixBeforeAddParentCategoryIds, prefixAfterAddParentCategoryIds))
+			builder.WriteString(addParentCategoryIds(lines[i]))
 		} else if strings.HasPrefix(lines[i], "INSERT INTO `transaction_evidences` ") {
 			builder.WriteString(changeDBSchema(lines[i], prefixBeforeRemoveTransactionEvidenceColumns, prefixAfterRemoveTransactionEvidenceColumns))
 		} else if strings.HasPrefix(lines[i], "INSERT INTO `shippings` ") {
@@ -101,11 +101,25 @@ func changeDBSchema(line, prefixBefore, prefixAfter string) string {
 	return builder.String()
 }
 
+func addParentCategoryIds(line string) string {
+	line = strings.TrimPrefix(line, prefixBeforeAddParentCategoryIds)
+	itemStrings := strings.SplitAfter(line, "), ")
+
+	var builder strings.Builder
+	builder.WriteString(prefixAfterAddParentCategoryIds)
+	for i := range itemStrings {
+		builder.WriteString(addParentCategoryId(itemStrings[i]))
+	}
+	return builder.String()
+}
+
+
 func getKeys(str string) []string {
 	return strings.Split(getKakkoContent(strings.ReplaceAll(str, " ", "")), ",")
 }
 
 func getKakkoContent(str string) string {
+	return str[strings.Index(str, "("):strings.LastIndex(str, ")") - 1]
 	return strings.Split(strings.Split(str, "(")[1], ")")[0]
 }
 
