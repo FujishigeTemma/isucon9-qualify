@@ -45,10 +45,6 @@ type SchemaKey struct {
 	before int
 	after int
 }
-type SchemaValue struct {
-	value string
-	
-}
 
 func changeDBSchema(line, prefixBefore, prefixAfter string) string {
 	line = strings.TrimPrefix(line, prefixBefore)
@@ -86,6 +82,14 @@ func changeDBSchema(line, prefixBefore, prefixAfter string) string {
 			}
 		}
 		builder.WriteString("(")
+
+		for vI, vV := range afterValue {
+			builder.WriteString(vV)
+			if vI + 1 != len(keyIndexes) {
+				builder.WriteString(", ")
+			}
+		}
+
 		builder.WriteString(strings.Join(afterValue, ", "))
 		if i + 1 == itemLen {
 			builder.WriteString(")")
