@@ -33,7 +33,7 @@ func main() {
 			}
 		}
 		str += lines[i]
-		if strings.HasPrefix(lines[i], "INSERT INTO") {
+		if strings.HasPrefix(lines[i], "INSERT INTO") && str != "" {
 			if strings.HasPrefix(lines[i], "INSERT INTO `items` ") {
 				flag = "items"
 			} else if strings.HasPrefix(lines[i], "INSERT INTO `transaction_evidences` ") {
