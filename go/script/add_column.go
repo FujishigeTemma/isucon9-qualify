@@ -20,12 +20,11 @@ func main() {
 	var str string
 	flag := ""
 	for i := range lines {
-		if strings.HasPrefix(lines[i], "INSERT INTO") && str != "" {
+		if strings.HasPrefix(lines[i], "INSERT INTO") {
 			switch flag {
 				case "items":
 					fmt.Println(str)
-					fmt.Println(lines[i])
-					builder.WriteString(addParentCategoryIds(lines[i]))
+					builder.WriteString(addParentCategoryIds(str))
 				case "transaction_evidences":
 					builder.WriteString(changeDBSchema(str, prefixBeforeRemoveTransactionEvidenceColumns, prefixAfterRemoveTransactionEvidenceColumns))
 				case "shippings":
@@ -34,9 +33,6 @@ func main() {
 					builder.WriteString(str)
 			}
 			str = ""
-		}
-		str += lines[i] + "\n"
-		if strings.HasPrefix(lines[i], "INSERT INTO") {
 			if strings.HasPrefix(lines[i], "INSERT INTO `items` ") {
 				flag = "items"
 			} else if strings.HasPrefix(lines[i], "INSERT INTO `transaction_evidences` ") {
@@ -47,6 +43,7 @@ func main() {
 				flag = "none"
 			}
 		}
+		str += lines[i] + "\n"
 		
 		builder.WriteString("\n")
 	}
