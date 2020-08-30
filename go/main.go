@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bytes"
 	crand "crypto/rand"
 	"database/sql"
+	"encoding/gob"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -20,6 +22,7 @@ import (
 
 	"github.com/francoispqt/gojay"
 	_ "github.com/go-sql-driver/mysql"
+	"github.com/gomodule/redigo/redis"
 	"github.com/jmoiron/sqlx"
 	jsoniter "github.com/json-iterator/go"
 	goji "goji.io"
@@ -68,6 +71,7 @@ const (
 
 var (
 	dbx                      *sqlx.DB
+	kvs                      KVS
 	categories               []Category
 	doneTransactionEvidences map[int64]struct{}
 	buyingMutexMap           BuyingMutexMap
@@ -81,7 +85,90 @@ var (
 	shipmentServiceURL = DefaultShipmentServiceURL
 )
 
-const UserCacheMapShards = 256
+type KVS struct {
+	te redis.Conn
+	s  redis.Conn
+}
+
+func (k *KVS) Send(db int, commandName string, args ...interface{}) error {
+	switch db {
+	case 1:
+		return k.te.Send(commandName, args...)
+	case 2:
+		return k.s.Send(commandName, args...)
+	default:
+		return fmt.Errorf("invalid db")
+	}
+}
+
+func (k *KVS) Flush(db int) error {
+	switch db {
+	case 1:
+		return k.te.Flush()
+	case 2:
+		return k.s.Flush()
+	default:
+		return fmt.Errorf("invalid db")
+	}
+}
+
+func (k *KVS) Receive(db int) (interface{}, error) {
+	switch db {
+	case 1:
+		return k.te.Receive()
+	case 2:
+		return k.s.Receive()
+	default:
+		return nil, fmt.Errorf("invalid db")
+	}
+}
+
+func migrateFromMySQLtoRedis() {
+	//var recordCount int
+	//err := dbx.Get(&recordCount, "SELECT count(*) from `transaction_evidences`")
+	//if err != nil {
+	//	log.Fatal(err)
+	//}
+	var transactionEvidences []TransactionEvidence
+	err := dbx.Select(&transactionEvidences, "SELECT * from `transaction_evidences`")
+	if err != nil {
+		log.Fatal(err)
+	}
+	for _, evidence := range transactionEvidences {
+		buf := bytes.NewBuffer(nil)
+		if err := gob.NewEncoder(buf).Encode(&evidence); err != nil {
+			log.Fatal(err)
+		}
+		if err := kvs.Send(1, "SET", evidence.ID, buf.Bytes()); err != nil {
+			log.Fatal(err)
+		}
+		if err := kvs.Send(1, "SET", evidence.ItemID, buf.Bytes()); err != nil {
+			log.Fatal(err)
+		}
+		if err := kvs.Flush(1); err != nil {
+			log.Fatal(err)
+		}
+	}
+	var shippings []Shipping
+	err = dbx.Select(&shippings, "SELECT * from `shippings`")
+	if err != nil {
+		log.Fatal(err)
+	}
+	for _, shipping := range shippings {
+		buf := bytes.NewBuffer(nil)
+		if err := gob.NewEncoder(buf).Encode(&shipping); err != nil {
+			log.Fatal(err)
+		}
+		if err := kvs.Send(2, "SET", shipping.TransactionEvidenceID, buf.Bytes()); err != nil {
+			log.Fatal(err)
+		}
+		if err := kvs.Flush(2); err != nil {
+			log.Fatal(err)
+		}
+	}
+}
+
+const UserCacheMapShards = 1024
 
 type UserCacheMapShard struct {
 	users map[int64]User
@@ -544,6 +631,30 @@ func main() {
 	http.DefaultTransport.(*http.Transport).MaxIdleConnsPerHost = 1024
 	http.DefaultTransport.(*http.Transport).ForceAttemptHTTP2 = true
 	http.DefaultClient.Timeout = 5 * time.Second
+
+	const Addr = "172.16.0.163:6379"
+	conn, err := redis.Dial("tcp", Addr,
+		redis.DialUsername("isucari"),
+		redis.DialPassword("isucari"),
+		redis.DialDatabase(1),
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
+	kvs.te = conn
+	defer kvs.te.Close()
+	conn, err = redis.Dial("tcp", Addr,
+		redis.DialUsername("isucari"),
+		redis.DialPassword("isucari"),
+		redis.DialDatabase(2),
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
+	kvs.s = conn
+	defer kvs.s.Close()
+
+	migrateFromMySQLtoRedis()
 
 	mux := goji.NewMux()
 
@@ -1137,27 +1248,54 @@ type ShippingSimple struct {
 }
 
 func getShippingStatuses(tx *sqlx.Tx, w http.ResponseWriter, transactionEvidenceIDs []int64) ([]ShippingSimple, bool) {
-	query, args, err := sqlx.In("SELECT transaction_evidence_id, status FROM `shippings` WHERE `transaction_evidence_id` IN (?)", transactionEvidenceIDs)
-	if err != nil {
-		log.Print(err)
-		outputErrorMsg(w, http.StatusInternalServerError, "query error")
-		tx.Rollback()
-		return []ShippingSimple{}, true
-	}
-	query = dbx.Rebind(query)
+	//query, args, err := sqlx.In("SELECT transaction_evidence_id, status FROM `shippings` WHERE `transaction_evidence_id` IN (?)", transactionEvidenceIDs)
+	//if err != nil {
+	//	log.Print(err)
+	//	outputErrorMsg(w, http.StatusInternalServerError, "query error")
+	//	tx.Rollback()
+	//	return []ShippingSimple{}, true
+	//}
+	//query = dbx.Rebind(query)
+	//
+	//shippings := make([]ShippingSimple, 0, len(transactionEvidenceIDs))
+	//err = sqlx.Select(tx, &shippings, query, args...)
+	//if err == sql.ErrNoRows {
+	//	outputErrorMsg(w, http.StatusNotFound, "shipping not found")
+	//	tx.Rollback()
+	//	return shippings, true
+	//}
+	//if err != nil {
+	//	log.Print(err)
+	//	outputErrorMsg(w, http.StatusInternalServerError, "db error")
+	//	tx.Rollback()
+	//	return shippings, true
+	//}
+	//
+	//return shippings, false
 
-	shippings := make([]ShippingSimple, 0, len(transactionEvidenceIDs))
-	err = sqlx.Select(tx, &shippings, query, args...)
-	if err == sql.ErrNoRows {
-		outputErrorMsg(w, http.StatusNotFound, "shipping not found")
-		tx.Rollback()
-		return shippings, true
+	for _, id := range transactionEvidenceIDs {
+		if err := kvs.Send(1, "GET", id); err != nil {
+			log.Print(err)
+			outputErrorMsg(w, http.StatusInternalServerError, "db error")
+		}
 	}
-	if err != nil {
-		log.Print(err)
-		outputErrorMsg(w, http.StatusInternalServerError, "db error")
-		tx.Rollback()
-		return shippings, true
+	if err := kvs.Flush(1); err != nil {
+		log.Fatal(err)
+	}
+	shippings := make([]ShippingSimple, len(transactionEvidenceIDs))
+	for i, id := range transactionEvidenceIDs {
+		var s Shipping
+		data, err := kvs.Receive(1)
+		if err != nil {
+			log.Fatal(err)
+		}
+		buf := bytes.NewBuffer(data.([]byte))
+		_ = gob.NewDecoder(buf).Decode(&s)
+		kvs.Receive(1)
+		shippings[i] = ShippingSimple{
+			id,
+			s.Status,
+		}
 	}
 
 	return shippings, false
