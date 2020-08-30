@@ -1,6 +1,7 @@
 package sub
 
 import (
+	"fmt"
 	"io/ioutil"
 	"regexp"
 	"strings"
@@ -115,12 +116,14 @@ func addParentCategoryIds(line string) string {
 
 
 func getKeys(str string) []string {
-	return strings.Split(getKakkoContent(strings.ReplaceAll(str, " ", "")), ",")
+	return strings.Split(getKakkoContent(str), ",")
 }
 
 func getKakkoContent(str string) string {
+	fmt.Println(str)
+	fmt.Println(strings.Index(str, "("))
+	fmt.Println(strings.LastIndex(str, ")"))
 	return str[strings.Index(str, "("):strings.LastIndex(str, ")") - 1]
-	return strings.Split(strings.Split(str, "(")[1], ")")[0]
 }
 
 var categoryRe = regexp.MustCompile(`\.jpg', (\d+), `)
