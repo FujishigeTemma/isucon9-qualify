@@ -18,7 +18,7 @@ type SessionStore []*SessionStoreShard
 
 func NewSessionStore() SessionStore {
 	m := make(SessionStore, SessionStoreShards)
-	for i := 0; i < UserCacheMapShards; i++ {
+	for i := 0; i < SessionStoreShards; i++ {
 		shard := NewSessionStoreShard()
 		m[i] = &shard
 	}

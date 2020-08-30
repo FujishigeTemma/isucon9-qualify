@@ -748,7 +748,7 @@ func postInitialize(w http.ResponseWriter, r *http.Request) {
 	cmd := exec.Command("../sql/init.sh")
 	cmd.Stderr = os.Stderr
 	cmd.Stdout = os.Stderr
-	cmd.Run()
+	err = cmd.Run()
 	if err != nil {
 		outputErrorMsg(w, http.StatusInternalServerError, "exec init.sh error")
 		return
@@ -871,10 +871,10 @@ func getNewItems(w http.ResponseWriter, r *http.Request) {
 	}
 
 	itemSimples := make(ItemSimples, len(items))
-	if err != nil {
-		outputErrorMsg(w, http.StatusNotFound, "seller not found")
-		return
-	}
+	//if err != nil {
+	//	outputErrorMsg(w, http.StatusNotFound, "seller not found")
+	//	return
+	//}
 
 	for i := range items {
 		seller, err := getUserSimpleByID(items[i].SellerID)
@@ -915,11 +915,10 @@ func getNewItems(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json;charset=utf-8")
-	gojay.NewEncoder(w).Encode(&rni)
+	err = gojay.NewEncoder(w).Encode(&rni)
 	if err != nil {
 		log.Print(err)
 	}
-
 }
 
 func getNewCategoryItems(w http.ResponseWriter, r *http.Request) {
@@ -1290,8 +1289,9 @@ func getShippingStatuses(tx *sqlx.Tx, w http.ResponseWriter, transactionEvidence
 			log.Fatal(err)
 		}
 		buf := bytes.NewBuffer(data.([]byte))
-		_ = gob.NewDecoder(buf).Decode(&s)
-		kvs.Receive(1)
+		if err := gob.NewDecoder(buf).Decode(&s); err != nil {
+			log.Fatal(err)
+		}
 		shippings[i] = ShippingSimple{
 			id,
 			s.Status,
