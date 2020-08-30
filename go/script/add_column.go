@@ -35,10 +35,10 @@ func main() {
 const prefixBeforeAddParentCategoryIds = "INSERT INTO `items` (`id`,`seller_id`,`buyer_id`,`status`,`name`,`price`,`description`,`image_name`,`category_id`,`created_at`,`updated_at`) VALUES "
 const prefixAfterAddParentCategoryIds = "INSERT INTO `items` (`id`,`seller_id`,`buyer_id`,`status`,`name`,`price`,`description`,`image_name`,`category_id`,`parent_category_id`,`created_at`,`updated_at`) VALUES "
 
-const prefixBeforeRemoveTransactionEvidenceColumns = "INSERT INTO `transaction_evidences` (`seller_id`, `buyer_id`, `status`, `item_id`, `item_name`, `item_price`, `item_description`, `item_category_id`, `item_root_category_id`) VALUES "
+const prefixBeforeRemoveTransactionEvidenceColumns = "INSERT INTO `transaction_evidences` (`id`,`seller_id`,`buyer_id`,`status`,`item_id`,`item_name`,`item_price`,`item_description`,`item_category_id`,`item_root_category_id`,`created_at`,`updated_at`) VALUES "
 const prefixAfterRemoveTransactionEvidenceColumns = "INSERT INTO `transaction_evidences` (`seller_id`, `buyer_id`, `status`, `item_id`) VALUES "
 
-const prefixBeforeRemoveShippingColumns = "INSERT INTO `shippings` (`transaction_evidence_id`, `status`, `item_name`, `item_id`, `reserve_id`, `reserve_time`, `to_address`, `to_name`, `from_address`, `from_name`, `img_binary`) VALUES "
+const prefixBeforeRemoveShippingColumns = "INSERT INTO `shippings` (`transaction_evidence_id`,`status`,`item_name`,`item_id`,`reserve_id`,`reserve_time`,`to_address`,`to_name`,`from_address`,`from_name`,`img_binary`,`created_at`,`updated_at`) VALUES "
 const prefixAfterRemoveShippingColumns = "INSERT INTO `shippings` (`transaction_evidence_id`, `status`, `reserve_id`, `reserve_time`, `img_binary`) VALUES "
 
 type SchemaKey struct {
