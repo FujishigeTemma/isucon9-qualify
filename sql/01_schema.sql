@@ -45,31 +45,16 @@ CREATE TABLE `transaction_evidences` (
   `seller_id` bigint NOT NULL,
   `buyer_id` bigint NOT NULL,
   `status` enum('wait_shipping', 'wait_done', 'done') NOT NULL,
-  `item_id` bigint NOT NULL UNIQUE,
-  `item_name` varchar(191) NOT NULL,
-  `item_price` int unsigned NOT NULL,
-  `item_description` text NOT NULL,
-  `item_category_id` int unsigned NOT NULL,
-  `item_root_category_id` int unsigned NOT NULL,
-  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP
+  `item_id` bigint NOT NULL UNIQUE
 ) ENGINE=InnoDB DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_bin;
 
 DROP TABLE IF EXISTS `shippings`;
 CREATE TABLE `shippings` (
   `transaction_evidence_id` bigint NOT NULL PRIMARY KEY,
   `status` enum('initial', 'wait_pickup', 'shipping', 'done') NOT NULL,
-  `item_name` varchar(191) NOT NULL,
-  `item_id` bigint NOT NULL,
   `reserve_id` varchar(191) NOT NULL,
   `reserve_time` bigint NOT NULL,
-  `to_address` varchar(191) NOT NULL,
-  `to_name` varchar(191) NOT NULL,
-  `from_address` varchar(191) NOT NULL,
-  `from_name` varchar(191) NOT NULL,
-  `img_binary` mediumblob NOT NULL,
-  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP
+  `img_binary` mediumblob NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_bin;
 
 DROP TABLE IF EXISTS `categories`;

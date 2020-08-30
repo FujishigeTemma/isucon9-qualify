@@ -322,29 +322,14 @@ type TransactionEvidence struct {
 	BuyerID            int64     `json:"buyer_id" db:"buyer_id"`
 	Status             string    `json:"status" db:"status"`
 	ItemID             int64     `json:"item_id" db:"item_id"`
-	ItemName           string    `json:"item_name" db:"item_name"`
-	ItemPrice          int       `json:"item_price" db:"item_price"`
-	ItemDescription    string    `json:"item_description" db:"item_description"`
-	ItemCategoryID     int       `json:"item_category_id" db:"item_category_id"`
-	ItemRootCategoryID int       `json:"item_root_category_id" db:"item_root_category_id"`
-	CreatedAt          time.Time `json:"-" db:"created_at"`
-	UpdatedAt          time.Time `json:"-" db:"updated_at"`
 }
 
 type Shipping struct {
 	TransactionEvidenceID int64     `json:"transaction_evidence_id" db:"transaction_evidence_id"`
 	Status                string    `json:"status" db:"status"`
-	ItemName              string    `json:"item_name" db:"item_name"`
-	ItemID                int64     `json:"item_id" db:"item_id"`
 	ReserveID             string    `json:"reserve_id" db:"reserve_id"`
 	ReserveTime           int64     `json:"reserve_time" db:"reserve_time"`
-	ToAddress             string    `json:"to_address" db:"to_address"`
-	ToName                string    `json:"to_name" db:"to_name"`
-	FromAddress           string    `json:"from_address" db:"from_address"`
-	FromName              string    `json:"from_name" db:"from_name"`
 	ImgBinary             []byte    `json:"-" db:"img_binary"`
-	CreatedAt             time.Time `json:"-" db:"created_at"`
-	UpdatedAt             time.Time `json:"-" db:"updated_at"`
 }
 
 type Category struct {
@@ -1832,16 +1817,11 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := tx.Exec("INSERT INTO `transaction_evidences` (`seller_id`, `buyer_id`, `status`, `item_id`, `item_name`, `item_price`, `item_description`,`item_category_id`,`item_root_category_id`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+	result, err := tx.Exec("INSERT INTO `transaction_evidences` (`seller_id`, `buyer_id`, `status`, `item_id`) VALUES (?, ?, ?, ?)",
 		item.SellerID,
 		buyer.ID,
 		TransactionEvidenceStatusWaitShipping,
 		item.ID,
-		item.Name,
-		item.Price,
-		item.Description,
-		category.ID,
-		category.ParentID,
 	)
 	if err != nil {
 		log.Print(err)
@@ -1965,7 +1945,7 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err = tx.Exec("INSERT INTO `shippings` (`transaction_evidence_id`, `status`, `item_name`, `item_id`, `reserve_id`, `reserve_time`, `to_address`, `to_name`, `from_address`, `from_name`, `img_binary`) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+	_, err = tx.Exec("INSERT INTO `shippings` (`transaction_evidence_id`, `status`, `reserve_id`, `reserve_time`, `img_binary`) VALUES (?,?,?,?,?)",
 		transactionEvidenceID,
 		ShippingsStatusInitial,
 		item.Name,
@@ -2630,9 +2610,23 @@ func postRegister(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(u)
 }
 
+type Report struct {
+	ID                 int64     `json:"id" db:"id"`
+	SellerID           int64     `json:"seller_id" db:"seller_id"`
+	BuyerID            int64     `json:"buyer_id" db:"buyer_id"`
+	Status             string    `json:"status" db:"status"`
+	ItemID             int64     `json:"item_id" db:"item_id"`
+	ItemName           string    `json:"item_name" db:"item_name"`
+	ItemPrice          int       `json:"item_price" db:"item_price"`
+	ItemDescription    string    `json:"item_description" db:"item_description"`
+	ItemCategoryID     int       `json:"item_category_id" db:"item_category_id"`
+	ItemRootCategoryID int       `json:"item_root_category_id" db:"item_root_category_id"`
+}
+
 func getReports(w http.ResponseWriter, r *http.Request) {
-	transactionEvidences := make([]TransactionEvidence, 0)
-	err := dbx.Select(&transactionEvidences, "SELECT * FROM `transaction_evidences` WHERE `id` > 15007")
+	reports := make([]Report, 0)
+	// ここいい感じにやる
+	err := dbx.Select(&reports, "SELECT * FROM `transaction_evidences` WHERE `id` > 15007")
 	if err != nil {
 		log.Print(err)
 		outputErrorMsg(w, http.StatusInternalServerError, "db error")
@@ -2640,7 +2634,7 @@ func getReports(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json;charset=utf-8")
-	json.NewEncoder(w).Encode(transactionEvidences)
+	json.NewEncoder(w).Encode(reports)
 }
 
 func outputErrorMsg(w http.ResponseWriter, status int, msg string) {
