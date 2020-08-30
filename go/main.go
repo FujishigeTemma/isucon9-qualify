@@ -634,7 +634,6 @@ func main() {
 
 	const Addr = "172.16.0.163:6379"
 	conn, err := redis.Dial("tcp", Addr,
-		redis.DialUsername("isucari"),
 		redis.DialPassword("isucari"),
 		redis.DialDatabase(1),
 	)
@@ -644,7 +643,6 @@ func main() {
 	kvs.te = conn
 	defer kvs.te.Close()
 	conn, err = redis.Dial("tcp", Addr,
-		redis.DialUsername("isucari"),
 		redis.DialPassword("isucari"),
 		redis.DialDatabase(2),
 	)
