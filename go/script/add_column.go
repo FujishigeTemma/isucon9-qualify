@@ -1,4 +1,4 @@
-package sub
+package main
 
 import (
 	"fmt"
@@ -20,7 +20,7 @@ func main() {
 	var str string
 	flag := ""
 	for i := range lines {
-		if strings.HasPrefix(lines[i], "INSERT INTO") {
+		if strings.HasPrefix(lines[i], "INSERT INTO") && str != "" {
 			switch flag {
 				case "items":
 					builder.WriteString(addParentCategoryIds(lines[i]))
@@ -32,8 +32,7 @@ func main() {
 					builder.WriteString(str)
 			}
 		}
-		str += lines[i]
-		if strings.HasPrefix(lines[i], "INSERT INTO") && str != "" {
+		if strings.HasPrefix(lines[i], "INSERT INTO") {
 			if strings.HasPrefix(lines[i], "INSERT INTO `items` ") {
 				flag = "items"
 			} else if strings.HasPrefix(lines[i], "INSERT INTO `transaction_evidences` ") {
@@ -43,7 +42,9 @@ func main() {
 			} else {
 				flag = "none"
 			}
-			str = ""
+			str = lines[i]
+		} else {
+			str += lines[i]
 		}
 		if str != "" {
 			switch flag {
