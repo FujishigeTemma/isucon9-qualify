@@ -20,9 +20,8 @@ func main() {
 	var str string
 	flag := ""
 	for i := range lines {
-		if !strings.HasPrefix(lines[i], "INSERT INTO") {
-			str += lines[i]
-		} else {
+		str += lines[i]
+		if strings.HasPrefix(lines[i], "INSERT INTO") {
 			switch flag {
 				case "items":
 					builder.WriteString(addParentCategoryIds(lines[i]))
@@ -33,7 +32,6 @@ func main() {
 				default:
 					builder.WriteString(str)
 			}
-			str = ""
 			if strings.HasPrefix(lines[i], "INSERT INTO `items` ") {
 				flag = "items"
 			} else if strings.HasPrefix(lines[i], "INSERT INTO `transaction_evidences` ") {
@@ -43,6 +41,7 @@ func main() {
 			} else {
 				flag = "none"
 			}
+			str = ""
 		}
 		if str != "" {
 			switch flag {
