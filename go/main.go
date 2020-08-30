@@ -1791,7 +1791,7 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	category, err := getCategoryByID(item.CategoryID)
+	_, err = getCategoryByID(item.CategoryID)
 	if err != nil {
 		log.Print(err)
 
@@ -2626,7 +2626,25 @@ type Report struct {
 func getReports(w http.ResponseWriter, r *http.Request) {
 	reports := make([]Report, 0)
 	// ここいい感じにやる
-	err := dbx.Select(&reports, "SELECT * FROM `transaction_evidences` WHERE `id` > 15007")
+	err := dbx.Select(
+		&reports,
+		`
+			SELECT 
+				'te'.'id' AS 'id', 
+				'te'.'seller_id' AS 'seller_id', 
+				'te'.'buyer_id' AS 'buyer_id', 
+				'te'.'status' AS 'status', 
+				'te'.'item_id' AS 'item_id', 
+				'i'.'name' AS 'item_name', 
+				'i'.'price' AS 'item_price', 
+				'i'.'description' AS 'item_description', 
+				'i'.'category_id' AS 'item_category_id', 
+				'i'.'parent_category_id' AS 'item_root_category_id', 
+			FROM 'transaction_evidences' AS 'te' 
+			JOIN 'items' AS 'i' ON 'te'.'item_id' = 'i'.'id' 
+			WHERE 'te'.'id' > 15007 
+		`,
+	)
 	if err != nil {
 		log.Print(err)
 		outputErrorMsg(w, http.StatusInternalServerError, "db error")
