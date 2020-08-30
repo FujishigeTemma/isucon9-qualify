@@ -123,6 +123,73 @@ func (k *KVS) Receive(db int) (interface{}, error) {
 	}
 }
 
+func (k *KVS) Do(db int, commandName string, args ...interface{}) (interface{}, error) {
+	switch db {
+	case 1:
+		return k.te.Do(commandName, args)
+	case 2:
+		return k.s.Do(commandName, args)
+	default:
+		return nil, fmt.Errorf("invalid db")
+	}
+}
+
+func getTEfromIDs(ids []int64) ([]TransactionEvidence, error) {
+	for _, id := range ids {
+		if err := kvs.Send(1, "GET", id); err != nil {
+			return nil, err
+		}
+	}
+	if err := kvs.Flush(1); err != nil {
+		return nil, err
+	}
+	tes := make([]TransactionEvidence, 0, len(ids))
+	for i := 0; i < len(ids); i++ {
+		var te TransactionEvidence
+		data, err := kvs.Receive(1)
+		if err != nil {
+			return nil, err
+		}
+		if data == nil {
+			continue
+		}
+		buf := bytes.NewBuffer(data.([]byte))
+		if err := gob.NewDecoder(buf).Decode(&te); err != nil {
+			return nil, err
+		}
+		tes = append(tes, te)
+	}
+	return tes, nil
+}
+
+func getSfromIDs(ids []int64) ([]Shipping, error) {
+	for _, id := range ids {
+		if err := kvs.Send(2, "GET", id); err != nil {
+			return nil, err
+		}
+	}
+	if err := kvs.Flush(2); err != nil {
+		return nil, err
+	}
+	shippings := make([]Shipping, 0, len(ids))
+	for i := 0; i < len(ids); i++ {
+		var s Shipping
+		data, err := kvs.Receive(2)
+		if err != nil {
+			return nil, err
+		}
+		if data == nil {
+			continue
+		}
+		buf := bytes.NewBuffer(data.([]byte))
+		if err := gob.NewDecoder(buf).Decode(&s); err != nil {
+			return nil, err
+		}
+		shippings = append(shippings, s)
+	}
+	return shippings, nil
+}
+
 func migrateFromMySQLtoRedis() {
 	reply, err := kvs.te.Do("FLUSHALL")
 	if err != nil {
@@ -1285,30 +1352,23 @@ func getShippingStatuses(tx *sqlx.Tx, w http.ResponseWriter, transactionEvidence
 	//
 	//return shippings, false
 
-	for _, id := range transactionEvidenceIDs {
-		if err := kvs.Send(2, "GET", id); err != nil {
-			log.Print(err)
-			outputErrorMsg(w, http.StatusInternalServerError, "db error")
-		}
+	//TODO: redis
+	shippings := make([]ShippingSimple, 0, len(transactionEvidenceIDs))
+	ss, err := getSfromIDs(transactionEvidenceIDs)
+	if err != nil {
+		log.Print(err)
+		outputErrorMsg(w, http.StatusInternalServerError, "db error")
+		return shippings, true
 	}
-	if err := kvs.Flush(2); err != nil {
-		log.Fatal(err)
+	if len(ss) <= 0 {
+		outputErrorMsg(w, http.StatusNotFound, "shipping not found")
+		return shippings, true
 	}
-	shippings := make([]ShippingSimple, len(transactionEvidenceIDs))
-	for i, id := range transactionEvidenceIDs {
-		var s Shipping
-		data, err := kvs.Receive(2)
-		if err != nil {
-			log.Fatal(err)
-		}
-		buf := bytes.NewBuffer(data.([]byte))
-		if err := gob.NewDecoder(buf).Decode(&s); err != nil {
-			log.Fatal(err)
-		}
-		shippings[i] = ShippingSimple{
-			id,
+	for _, s := range ss {
+		shippings = append(shippings, ShippingSimple{
+			s.TransactionEvidenceID,
 			s.Status,
-		}
+		})
 	}
 
 	return shippings, false
@@ -1348,22 +1408,31 @@ func getShippingStatuses(tx *sqlx.Tx, w http.ResponseWriter, transactionEvidence
 
 func getTransactionAdditions(tx *sqlx.Tx, w http.ResponseWriter, itemIDs []int64) ([]TransactionAdditions, bool) {
 	//TODO: redis
-	query, args, err := sqlx.In("SELECT id, status, item_id FROM `transaction_evidences` WHERE `item_id` IN (?)", itemIDs)
-	if err != nil {
-		log.Print(err)
-		outputErrorMsg(w, http.StatusInternalServerError, "query error")
-		tx.Rollback()
-		return []TransactionAdditions{}, true
-	}
-	query = dbx.Rebind(query)
+	//query, args, err := sqlx.In("SELECT id, status, item_id FROM `transaction_evidences` WHERE `item_id` IN (?)", itemIDs)
+	//if err != nil {
+	//	log.Print(err)
+	//	outputErrorMsg(w, http.StatusInternalServerError, "query error")
+	//	tx.Rollback()
+	//	return []TransactionAdditions{}, true
+	//}
+	//query = dbx.Rebind(query)
 
 	tas := make([]TransactionAdditions, 0, len(itemIDs))
-	err = sqlx.Select(tx, &tas, query, args...)
+	//err = sqlx.Select(tx, &
+	tes, err := getTEfromIDs(itemIDs)
 	if err != nil {
 		log.Print(err)
 		outputErrorMsg(w, http.StatusInternalServerError, "db error")
-		tx.Rollback()
+		//tx.Rollback()
 		return tas, true
+	}
+	for _, te := range tes {
+		tas = append(tas, TransactionAdditions{
+			te.ItemID,
+			te.ID,
+			te.Status,
+			"",
+		})
 	}
 	// It's able to ignore ErrNoRows
 	if len(tas) <= 0 {
@@ -2220,17 +2289,33 @@ func postShip(w http.ResponseWriter, r *http.Request) {
 	}
 
 	//TODO: redis
-	_, err = tx.Exec("UPDATE `shippings` SET `status` = ?, `img_binary` = ?, `updated_at` = ? WHERE `transaction_evidence_id` = ?",
-		ShippingsStatusWaitPickup,
-		img,
-		time.Now(),
-		teShip.TeID,
-	)
-	if err != nil {
+	//_, err = tx.Exec("UPDATE `shippings` SET `status` = ?, `img_binary` = ?, `updated_at` = ? WHERE `transaction_evidence_id` = ?",
+	//	ShippingsStatusWaitPickup,
+	//	img,
+	//	time.Now(),
+	//	teShip.TeID,
+	//)
+	shipping := Shipping{}
+	data, err := kvs.Do(2, "GET", teShip.TeID)
+	// dataがnilかチェックしてない
+	buf := bytes.NewBuffer(data.([]byte))
+	if err := gob.NewDecoder(buf).Decode(&shipping); err != nil {
+		outputErrorMsg(w, http.StatusInternalServerError, "decode error")
+		log.Fatal(err)
+	}
+	shipping.Status = ShippingsStatusWaitPickup
+	shipping.ImgBinary = img
+	shipping.UpdatedAt = time.Now()
+	buf.Reset()
+	if err := gob.NewEncoder(buf).Encode(&shipping); err != nil {
+		outputErrorMsg(w, http.StatusInternalServerError, "encode error")
+		log.Fatal(err)
+	}
+	if err := kvs.Send(2, "SET", teShip.TeID, buf.Bytes()); err != nil {
 		log.Print(err)
 
 		outputErrorMsg(w, http.StatusInternalServerError, "db error")
-		tx.Rollback()
+		//tx.Rollback()
 		return
 	}
 
@@ -2370,17 +2455,27 @@ func postComplete(w http.ResponseWriter, r *http.Request) {
 	//TODO: redis
 	tx := dbx.MustBegin()
 	transactionEvidence := TransactionEvidence{}
-	err = tx.Get(&transactionEvidence, "SELECT id, buyer_id, status FROM `transaction_evidences` WHERE `item_id` = ? FOR UPDATE", itemID)
-	if err == sql.ErrNoRows {
+	//err = tx.Get(&transactionEvidence, "SELECT id, buyer_id, status FROM `transaction_evidences` WHERE `item_id` = ? FOR UPDATE", itemID)
+	//if err == sql.ErrNoRows {
+	//	outputErrorMsg(w, http.StatusNotFound, "transaction_evidences not found")
+	//	tx.Rollback()
+	//	return
+	//}
+	data, err := kvs.Do(1, "GET", itemID)
+	if data == nil {
 		outputErrorMsg(w, http.StatusNotFound, "transaction_evidences not found")
-		tx.Rollback()
 		return
 	}
 	if err != nil {
 		log.Print(err)
 		outputErrorMsg(w, http.StatusInternalServerError, "db error")
-		tx.Rollback()
+		//tx.Rollback()
 		return
+	}
+	buf := bytes.NewBuffer(data.([]byte))
+	if err := gob.NewDecoder(buf).Decode(&transactionEvidence); err != nil {
+		outputErrorMsg(w, http.StatusInternalServerError, "decode error")
+		log.Fatal(err)
 	}
 
 	if transactionEvidence.BuyerID != buyerID {
@@ -2390,7 +2485,7 @@ func postComplete(w http.ResponseWriter, r *http.Request) {
 
 	if transactionEvidence.Status != TransactionEvidenceStatusWaitDone {
 		outputErrorMsg(w, http.StatusForbidden, "準備ができていません")
-		tx.Rollback()
+		//tx.Rollback()
 		return
 	}
 
