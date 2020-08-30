@@ -117,7 +117,6 @@ func changeDBSchema(line, prefixBefore, prefixAfter string) string {
 			}
 		}
 
-		builder.WriteString(strings.Join(afterValue, ", "))
 		if i + 1 == itemLen {
 			builder.WriteString(");")
 		} else {
