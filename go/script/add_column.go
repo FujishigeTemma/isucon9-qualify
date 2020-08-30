@@ -20,7 +20,6 @@ func main() {
 	var str string
 	flag := ""
 	for i := range lines {
-		str += lines[i]
 		if strings.HasPrefix(lines[i], "INSERT INTO") {
 			switch flag {
 				case "items":
@@ -32,6 +31,9 @@ func main() {
 				default:
 					builder.WriteString(str)
 			}
+		}
+		str += lines[i]
+		if strings.HasPrefix(lines[i], "INSERT INTO") {
 			if strings.HasPrefix(lines[i], "INSERT INTO `items` ") {
 				flag = "items"
 			} else if strings.HasPrefix(lines[i], "INSERT INTO `transaction_evidences` ") {
