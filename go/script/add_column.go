@@ -17,16 +17,46 @@ func main() {
 	lines := strings.Split(body, "\n")
 
 	var builder strings.Builder
+	var str string
+	flag := ""
 	for i := range lines {
-		if strings.HasPrefix(lines[i], "INSERT INTO `items` ") {
-			builder.WriteString(addParentCategoryIds(lines[i]))
-		} else if strings.HasPrefix(lines[i], "INSERT INTO `transaction_evidences` ") {
-			builder.WriteString(changeDBSchema(lines[i], prefixBeforeRemoveTransactionEvidenceColumns, prefixAfterRemoveTransactionEvidenceColumns))
-		} else if strings.HasPrefix(lines[i], "INSERT INTO `shippings` ") {
-			builder.WriteString(changeDBSchema(lines[i], prefixBeforeRemoveShippingColumns, prefixAfterRemoveShippingColumns))
+		if !strings.HasPrefix(lines[i], "INSERT INTO") {
+			str += lines[i]
 		} else {
-			builder.WriteString(lines[i])
+			switch flag {
+				case "items":
+					builder.WriteString(addParentCategoryIds(lines[i]))
+				case "transaction_evidences":
+					builder.WriteString(changeDBSchema(lines[i], prefixBeforeRemoveTransactionEvidenceColumns, prefixAfterRemoveTransactionEvidenceColumns))
+				case "shippings":
+					builder.WriteString(changeDBSchema(lines[i], prefixBeforeRemoveShippingColumns, prefixAfterRemoveShippingColumns))
+				default:
+					builder.WriteString(str)
+			}
+			str = ""
+			if strings.HasPrefix(lines[i], "INSERT INTO `items` ") {
+				flag = "items"
+			} else if strings.HasPrefix(lines[i], "INSERT INTO `transaction_evidences` ") {
+				flag = "transaction_evidences"
+			} else if strings.HasPrefix(lines[i], "INSERT INTO `shippings` ") {
+				flag = "shippings"
+			} else {
+				flag = "none"
+			}
 		}
+		if str != "" {
+			switch flag {
+				case "items":
+					builder.WriteString(addParentCategoryIds(lines[i]))
+				case "transaction_evidences":
+					builder.WriteString(changeDBSchema(lines[i], prefixBeforeRemoveTransactionEvidenceColumns, prefixAfterRemoveTransactionEvidenceColumns))
+				case "shippings":
+					builder.WriteString(changeDBSchema(lines[i], prefixBeforeRemoveShippingColumns, prefixAfterRemoveShippingColumns))
+				default:
+					builder.WriteString(str)
+			}
+		}
+
 		builder.WriteString("\n")
 	}
 	output := builder.String()
