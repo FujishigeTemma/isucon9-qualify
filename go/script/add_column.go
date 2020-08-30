@@ -18,7 +18,11 @@ func main() {
 	var builder strings.Builder
 	for i := range lines {
 		if strings.HasPrefix(lines[i], "INSERT INTO `items` ") {
-			builder.WriteString(addParentCategoryIds(lines[i]))
+			builder.WriteString(changeDBSchema(lines[i], prefixBeforeAddParentCategoryIds, prefixAfterAddParentCategoryIds))
+		} else if strings.HasPrefix(lines[i], "INSERT INTO `transaction_evidences` ") {
+			builder.WriteString(changeDBSchema(lines[i], prefixBeforeRemoveTransactionEvidenceColumns, prefixAfterRemoveTransactionEvidenceColumns))
+		} else if strings.HasPrefix(lines[i], "INSERT INTO `shippings` ") {
+			builder.WriteString(changeDBSchema(lines[i], prefixBeforeRemoveShippingColumns, prefixAfterRemoveShippingColumns))
 		} else {
 			builder.WriteString(lines[i])
 		}
@@ -28,10 +32,16 @@ func main() {
 	ioutil.WriteFile("./initial2.sql", []byte(output), 0666)
 }
 
-const prefixBefore = "INSERT INTO `items` (`id`,`seller_id`,`buyer_id`,`status`,`name`,`price`,`description`,`image_name`,`category_id`,`created_at`,`updated_at`) VALUES "
-const prefixAfter = "INSERT INTO `items` (`id`,`seller_id`,`buyer_id`,`status`,`name`,`price`,`description`,`image_name`,`category_id`,`parent_category_id`,`created_at`,`updated_at`) VALUES "
+const prefixBeforeAddParentCategoryIds = "INSERT INTO `items` (`id`,`seller_id`,`buyer_id`,`status`,`name`,`price`,`description`,`image_name`,`category_id`,`created_at`,`updated_at`) VALUES "
+const prefixAfterAddParentCategoryIds = "INSERT INTO `items` (`id`,`seller_id`,`buyer_id`,`status`,`name`,`price`,`description`,`image_name`,`category_id`,`parent_category_id`,`created_at`,`updated_at`) VALUES "
 
-func addParentCategoryIds(line string) string {
+const prefixBeforeRemoveTransactionEvidenceColumns = "INSERT INTO `transaction_evidences` (`seller_id`, `buyer_id`, `status`, `item_id`, `item_name`, `item_price`, `item_description`,`item_category_id`,`item_root_category_id`) VALUES "
+const prefixAfterRemoveTransactionEvidenceColumns = "INSERT INTO `transaction_evidences` (`seller_id`, `buyer_id`, `status`, `item_id`) VALUES "
+
+const prefixBeforeRemoveShippingColumns = "INSERT INTO `shippings` (`transaction_evidence_id`, `status`, `item_name`, `item_id`, `reserve_id`, `reserve_time`, `to_address`, `to_name`, `from_address`, `from_name`, `img_binary`) VALUES "
+const prefixAfterRemoveShippingColumns = "INSERT INTO `shippings` (`transaction_evidence_id`, `status`, `reserve_id`, `reserve_time`, `img_binary`) VALUES "
+
+func changeDBSchema(line, prefixBefore, prefixAfter string) string {
 	line = strings.TrimPrefix(line, prefixBefore)
 	itemStrings := strings.SplitAfter(line, "), ")
 
