@@ -1,7 +1,6 @@
-package main
+package sub
 
 import (
-	"fmt"
 	"io/ioutil"
 	"regexp"
 	"strings"
@@ -151,9 +150,6 @@ func getKeys(str string) []string {
 }
 
 func getKakkoContent(str string) string {
-	fmt.Println(str)
-	fmt.Println(strings.Index(str, "("))
-	fmt.Println(strings.LastIndex(str, ")"))
 	return str[strings.Index(str, "("):strings.LastIndex(str, ")") - 1]
 }
 
