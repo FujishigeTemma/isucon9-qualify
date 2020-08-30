@@ -1347,6 +1347,7 @@ func getShippingStatuses(tx *sqlx.Tx, w http.ResponseWriter, transactionEvidence
 }
 
 func getTransactionAdditions(tx *sqlx.Tx, w http.ResponseWriter, itemIDs []int64) ([]TransactionAdditions, bool) {
+	//TODO: redis
 	query, args, err := sqlx.In("SELECT id, status, item_id FROM `transaction_evidences` WHERE `item_id` IN (?)", itemIDs)
 	if err != nil {
 		log.Print(err)
@@ -1598,6 +1599,7 @@ func getItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	//TODO: redis
 	itemE := itemEPool.Get()
 	rows := "i.seller_id AS `i.seller_id`, i.buyer_id AS `i.buyer_id`, i.status AS `i.status`, i.name AS `i.name`, i.price AS `i.price`, i.description AS `i.description`, i.image_name AS `i.image_name`, i.category_id AS `i.category_id`, te.id AS `te_id`, te.status AS `te_status`, s.status AS `s_status`"
 	err = dbx.Get(itemE, "SELECT "+rows+" FROM `items` AS `i` LEFT JOIN `transaction_evidences` AS `te` ON `te`.`item_id` = `i`.`id` LEFT JOIN `shippings` AS `s` ON `s`.`transaction_evidence_id` = `te`.`id` WHERE `i`.`id` = ?", itemID)
@@ -1775,6 +1777,7 @@ func getQRCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	//TODO: redis
 	teWithS := TEWithS{}
 	err = dbx.Get(&teWithS, "SELECT `te`.`seller_id` AS `seller_id`, `s`.`status` AS `status`, `s`.`img_binary` AS `img_binary` FROM `transaction_evidences` AS `te` JOIN `shippings` AS `s` ON `te`.`id` = `s`.`transaction_evidence_id` WHERE `te`.`id` = ?", transactionEvidenceID)
 	if err == sql.ErrNoRows {
@@ -1983,6 +1986,7 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	//TODO: redis
 	result, err := tx.Exec("INSERT INTO `transaction_evidences` (`seller_id`, `buyer_id`, `status`, `item_id`, `item_name`, `item_price`, `item_description`,`item_category_id`,`item_root_category_id`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
 		item.SellerID,
 		buyer.ID,
@@ -2028,7 +2032,6 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO: 並列
 	var scr *APIShipmentCreateRes
 	var pstr *APIPaymentServiceTokenRes
 
@@ -2178,6 +2181,7 @@ func postShip(w http.ResponseWriter, r *http.Request) {
 
 	tx := dbx.MustBegin()
 
+	//TODO: redis
 	teShip := TeShip{}
 	err = tx.Get(&teShip, "SELECT `te`.`id` AS `te_id`, `te`.`seller_id` AS `seller_id`, `te`.`status` AS `te_status`, `s`.`reserve_id` AS `reserve_id` FROM `transaction_evidences` as `te` JOIN `shippings` AS `s` ON `te`.`id` = `s`.`transaction_evidence_id` WHERE `te`.`item_id` = ? FOR UPDATE", itemID)
 	if err == sql.ErrNoRows {
@@ -2215,6 +2219,7 @@ func postShip(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	//TODO: redis
 	_, err = tx.Exec("UPDATE `shippings` SET `status` = ?, `img_binary` = ?, `updated_at` = ? WHERE `transaction_evidence_id` = ?",
 		ShippingsStatusWaitPickup,
 		img,
@@ -2271,6 +2276,7 @@ func postShipDone(w http.ResponseWriter, r *http.Request) {
 
 	tx := dbx.MustBegin()
 
+	//TODO: redis
 	teShipDone := TeShipDone{}
 	err = tx.Get(&teShipDone, "SELECT `te`.`id` AS `te_id`, `te`.`seller_id` AS `seller_id`, `s`.`status` AS `s_status`, `s`.`reserve_id` AS `reserve_id` FROM `transaction_evidences` as `te` JOIN `shippings` AS `s` ON `te`.`id` = `s`.`transaction_evidence_id` WHERE `te`.`item_id` = ? FOR UPDATE", itemID)
 	if err == sql.ErrNoRows {
@@ -2315,6 +2321,7 @@ func postShipDone(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	//TODO: redis
 	_, err = tx.Exec("UPDATE `shippings` AS `s` JOIN `transaction_evidences` AS `te` ON `s`.`transaction_evidence_id` = `te`.`id` SET `s`.`status` = ?, `s`.`updated_at` = ?, `te`.`status` = ?, `te`.`updated_at` = ? WHERE `s`.`transaction_evidence_id` = ?",
 		status,
 		time.Now(),
@@ -2360,6 +2367,7 @@ func postComplete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	//TODO: redis
 	tx := dbx.MustBegin()
 	transactionEvidence := TransactionEvidence{}
 	err = tx.Get(&transactionEvidence, "SELECT id, buyer_id, status FROM `transaction_evidences` WHERE `item_id` = ? FOR UPDATE", itemID)
@@ -2386,6 +2394,7 @@ func postComplete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	//TODO: redis
 	_, err = tx.Exec("UPDATE `shippings` AS `s` JOIN `transaction_evidences` AS `te` ON `s`.`transaction_evidence_id` = `te`.`id` JOIN `items` AS `i` ON `i`.`id` = `te`.`item_id` SET `s`.`status` = ?, `s`.`updated_at` = ?, `te`.`status` = ?, `te`.`updated_at` = ?, `i`.`status` = ?, `i`.`updated_at` = ? WHERE `s`.`transaction_evidence_id` = ?",
 		ShippingsStatusDone,
 		time.Now(),
@@ -2783,6 +2792,7 @@ func postRegister(w http.ResponseWriter, r *http.Request) {
 
 func getReports(w http.ResponseWriter, r *http.Request) {
 	transactionEvidences := make([]TransactionEvidence, 0)
+	//TODO: redis
 	err := dbx.Select(&transactionEvidences, "SELECT * FROM `transaction_evidences` WHERE `id` > 15007")
 	if err != nil {
 		log.Print(err)
