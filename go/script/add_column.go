@@ -31,7 +31,9 @@ func main() {
 				default:
 					builder.WriteString(str)
 			}
+			str = ""
 		}
+		str += lines[i]
 		if strings.HasPrefix(lines[i], "INSERT INTO") {
 			if strings.HasPrefix(lines[i], "INSERT INTO `items` ") {
 				flag = "items"
@@ -42,24 +44,21 @@ func main() {
 			} else {
 				flag = "none"
 			}
-			str = lines[i]
-		} else {
-			str += lines[i]
 		}
-		if str != "" {
-			switch flag {
-				case "items":
-					builder.WriteString(addParentCategoryIds(lines[i]))
-				case "transaction_evidences":
-					builder.WriteString(changeDBSchema(lines[i], prefixBeforeRemoveTransactionEvidenceColumns, prefixAfterRemoveTransactionEvidenceColumns))
-				case "shippings":
-					builder.WriteString(changeDBSchema(lines[i], prefixBeforeRemoveShippingColumns, prefixAfterRemoveShippingColumns))
-				default:
-					builder.WriteString(str)
-			}
-		}
-
+		
 		builder.WriteString("\n")
+	}
+	if str != "" {
+		switch flag {
+			case "items":
+				builder.WriteString(addParentCategoryIds(str))
+			case "transaction_evidences":
+				builder.WriteString(changeDBSchema(str, prefixBeforeRemoveTransactionEvidenceColumns, prefixAfterRemoveTransactionEvidenceColumns))
+			case "shippings":
+				builder.WriteString(changeDBSchema(str, prefixBeforeRemoveShippingColumns, prefixAfterRemoveShippingColumns))
+			default:
+				builder.WriteString(str)
+		}
 	}
 	output := builder.String()
 	ioutil.WriteFile("./initial2.sql", []byte(output), 0666)
