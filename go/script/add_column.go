@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"io/ioutil"
 	"regexp"
 	"strings"
@@ -22,6 +23,8 @@ func main() {
 		if strings.HasPrefix(lines[i], "INSERT INTO") && str != "" {
 			switch flag {
 				case "items":
+					fmt.Println(str)
+					fmt.Println(lines[i])
 					builder.WriteString(addParentCategoryIds(lines[i]))
 				case "transaction_evidences":
 					builder.WriteString(changeDBSchema(str, prefixBeforeRemoveTransactionEvidenceColumns, prefixAfterRemoveTransactionEvidenceColumns))
@@ -156,6 +159,8 @@ func getKakkoContent(str string) string {
 var categoryRe = regexp.MustCompile(`\.jpg', (\d+), `)
 
 func addParentCategoryId(itemString string) string {
+	fmt.Println(itemString)
+	fmt.Println(categoryRe.FindStringSubmatch(itemString))
 	categoryID := categoryRe.FindStringSubmatch(itemString)[1]
 	parentCategoryID := getParentCategory(categoryID)
 	return categoryRe.ReplaceAllString(itemString, ".jpg', " + categoryID + ", " + parentCategoryID + ", ")
