@@ -124,13 +124,15 @@ func (k *KVS) Receive(db int) (interface{}, error) {
 }
 
 func migrateFromMySQLtoRedis() {
-	//var recordCount int
-	//err := dbx.Get(&recordCount, "SELECT count(*) from `transaction_evidences`")
-	//if err != nil {
-	//	log.Fatal(err)
-	//}
+	reply, err := kvs.te.Do("FLUSHALL")
+	if err != nil {
+		log.Print(reply)
+		log.Fatal(err)
+	}
+	log.Print(reply)
+
 	var transactionEvidences []TransactionEvidence
-	err := dbx.Select(&transactionEvidences, "SELECT * from `transaction_evidences`")
+	err = dbx.Select(&transactionEvidences, "SELECT * from `transaction_evidences`")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -145,10 +147,17 @@ func migrateFromMySQLtoRedis() {
 		if err := kvs.Send(1, "SET", evidence.ItemID, buf.Bytes()); err != nil {
 			log.Fatal(err)
 		}
-		if err := kvs.Flush(1); err != nil {
+	}
+	if err := kvs.Flush(1); err != nil {
+		log.Fatal(err)
+	}
+	for i := 0; i < len(transactionEvidences); i++ {
+		if reply, err := kvs.Receive(1); err != nil {
+			log.Print(reply)
 			log.Fatal(err)
 		}
 	}
+
 	var shippings []Shipping
 	err = dbx.Select(&shippings, "SELECT * from `shippings`")
 	if err != nil {
@@ -162,7 +171,13 @@ func migrateFromMySQLtoRedis() {
 		if err := kvs.Send(2, "SET", shipping.TransactionEvidenceID, buf.Bytes()); err != nil {
 			log.Fatal(err)
 		}
-		if err := kvs.Flush(2); err != nil {
+	}
+	if err := kvs.Flush(2); err != nil {
+		log.Fatal(err)
+	}
+	for i := 0; i < len(shippings); i++ {
+		if reply, err := kvs.Receive(2); err != nil {
+			log.Print(reply)
 			log.Fatal(err)
 		}
 	}
@@ -1271,18 +1286,18 @@ func getShippingStatuses(tx *sqlx.Tx, w http.ResponseWriter, transactionEvidence
 	//return shippings, false
 
 	for _, id := range transactionEvidenceIDs {
-		if err := kvs.Send(1, "GET", id); err != nil {
+		if err := kvs.Send(2, "GET", id); err != nil {
 			log.Print(err)
 			outputErrorMsg(w, http.StatusInternalServerError, "db error")
 		}
 	}
-	if err := kvs.Flush(1); err != nil {
+	if err := kvs.Flush(2); err != nil {
 		log.Fatal(err)
 	}
 	shippings := make([]ShippingSimple, len(transactionEvidenceIDs))
 	for i, id := range transactionEvidenceIDs {
 		var s Shipping
-		data, err := kvs.Receive(1)
+		data, err := kvs.Receive(2)
 		if err != nil {
 			log.Fatal(err)
 		}
