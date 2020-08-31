@@ -67,6 +67,7 @@ const (
 	TransactionsPerPage = 10
 
 	BcryptCost = 4
+	Offset     = 20000
 )
 
 var (
@@ -78,11 +79,14 @@ var (
 	itemsPool                = NewItemsPool(ItemsPerPage + 1)
 	itemsTPool               = NewItemsPool(TransactionsPerPage + 1)
 	itemEPool                = NewItemEPool()
+	transactionEvidencePool  = NewTransactionEvidencePool()
+	shippingPool             = NewShippingPool()
 
 	usersCache = NewUserCacheMap()
 
-	paymentServiceURL  = DefaultPaymentServiceURL
-	shipmentServiceURL = DefaultShipmentServiceURL
+	paymentServiceURL   = DefaultPaymentServiceURL
+	shipmentServiceURL  = DefaultShipmentServiceURL
+	NewestTransactionID int64
 )
 
 type KVS struct {
@@ -162,6 +166,34 @@ func getTEfromIDs(ids []int64) ([]TransactionEvidence, error) {
 	return tes, nil
 }
 
+func getTEfromItemIDs(ids []int64) ([]TransactionEvidence, error) {
+	for _, id := range ids {
+		if err := kvs.Send(1, "GET", id+Offset); err != nil {
+			return nil, err
+		}
+	}
+	if err := kvs.Flush(1); err != nil {
+		return nil, err
+	}
+	tes := make([]TransactionEvidence, 0, len(ids))
+	for i := 0; i < len(ids); i++ {
+		var te TransactionEvidence
+		data, err := kvs.Receive(1)
+		if err != nil {
+			return nil, err
+		}
+		if data == nil {
+			continue
+		}
+		buf := bytes.NewBuffer(data.([]byte))
+		if err := gob.NewDecoder(buf).Decode(&te); err != nil {
+			return nil, err
+		}
+		tes = append(tes, te)
+	}
+	return tes, nil
+}
+
 func getSfromIDs(ids []int64) ([]Shipping, error) {
 	for _, id := range ids {
 		if err := kvs.Send(2, "GET", id); err != nil {
@@ -204,6 +236,9 @@ func migrateFromMySQLtoRedis() {
 		log.Fatal(err)
 	}
 	for _, evidence := range transactionEvidences {
+		if evidence.ID > NewestTransactionID {
+			NewestTransactionID = evidence.ID
+		}
 		buf := bytes.NewBuffer(nil)
 		if err := gob.NewEncoder(buf).Encode(&evidence); err != nil {
 			log.Fatal(err)
@@ -211,7 +246,7 @@ func migrateFromMySQLtoRedis() {
 		if err := kvs.Send(1, "SET", evidence.ID, buf.Bytes()); err != nil {
 			log.Fatal(err)
 		}
-		if err := kvs.Send(1, "SET", evidence.ItemID, buf.Bytes()); err != nil {
+		if err := kvs.Send(1, "SET", evidence.ItemID*10000, buf.Bytes()); err != nil {
 			log.Fatal(err)
 		}
 	}
@@ -485,6 +520,26 @@ func (id *ItemDetails) IsNil() bool {
 	return len(*id) == 0
 }
 
+type TransactionEvidencePool struct {
+	p sync.Pool
+}
+
+func NewTransactionEvidencePool() TransactionEvidencePool {
+	return TransactionEvidencePool{
+		p: sync.Pool{
+			New: func() interface{} {
+				return &TransactionEvidence{}
+			},
+		},
+	}
+}
+func (p *TransactionEvidencePool) Get() *TransactionEvidence {
+	return p.p.Get().(*TransactionEvidence)
+}
+func (p *TransactionEvidencePool) Put(te *TransactionEvidence) {
+	p.p.Put(te)
+}
+
 type TransactionEvidence struct {
 	ID                 int64     `json:"id" db:"id"`
 	SellerID           int64     `json:"seller_id" db:"seller_id"`
@@ -498,6 +553,26 @@ type TransactionEvidence struct {
 	ItemRootCategoryID int       `json:"item_root_category_id" db:"item_root_category_id"`
 	CreatedAt          time.Time `json:"-" db:"created_at"`
 	UpdatedAt          time.Time `json:"-" db:"updated_at"`
+}
+
+type ShippingPool struct {
+	p sync.Pool
+}
+
+func NewShippingPool() ShippingPool {
+	return ShippingPool{
+		p: sync.Pool{
+			New: func() interface{} {
+				return &Shipping{}
+			},
+		},
+	}
+}
+func (p *ShippingPool) Get() *Shipping {
+	return p.p.Get().(*Shipping)
+}
+func (p *ShippingPool) Put(s *Shipping) {
+	p.p.Put(s)
 }
 
 type Shipping struct {
@@ -1352,7 +1427,7 @@ func getShippingStatuses(tx *sqlx.Tx, w http.ResponseWriter, transactionEvidence
 	//
 	//return shippings, false
 
-	//TODO: redis
+	//TODO: redis(done)
 	shippings := make([]ShippingSimple, 0, len(transactionEvidenceIDs))
 	ss, err := getSfromIDs(transactionEvidenceIDs)
 	if err != nil {
@@ -1407,7 +1482,7 @@ func getShippingStatuses(tx *sqlx.Tx, w http.ResponseWriter, transactionEvidence
 }
 
 func getTransactionAdditions(tx *sqlx.Tx, w http.ResponseWriter, itemIDs []int64) ([]TransactionAdditions, bool) {
-	//TODO: redis
+	//TODO: redis(done)
 	//query, args, err := sqlx.In("SELECT id, status, item_id FROM `transaction_evidences` WHERE `item_id` IN (?)", itemIDs)
 	//if err != nil {
 	//	log.Print(err)
@@ -1419,7 +1494,7 @@ func getTransactionAdditions(tx *sqlx.Tx, w http.ResponseWriter, itemIDs []int64
 
 	tas := make([]TransactionAdditions, 0, len(itemIDs))
 	//err = sqlx.Select(tx, &
-	tes, err := getTEfromIDs(itemIDs)
+	tes, err := getTEfromItemIDs(itemIDs)
 	if err != nil {
 		log.Print(err)
 		outputErrorMsg(w, http.StatusInternalServerError, "db error")
@@ -1668,10 +1743,16 @@ func getItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	//TODO: redis
-	itemE := itemEPool.Get()
-	rows := "i.seller_id AS `i.seller_id`, i.buyer_id AS `i.buyer_id`, i.status AS `i.status`, i.name AS `i.name`, i.price AS `i.price`, i.description AS `i.description`, i.image_name AS `i.image_name`, i.category_id AS `i.category_id`, te.id AS `te_id`, te.status AS `te_status`, s.status AS `s_status`"
-	err = dbx.Get(itemE, "SELECT "+rows+" FROM `items` AS `i` LEFT JOIN `transaction_evidences` AS `te` ON `te`.`item_id` = `i`.`id` LEFT JOIN `shippings` AS `s` ON `s`.`transaction_evidence_id` = `te`.`id` WHERE `i`.`id` = ?", itemID)
+	//TODO: redis(done)
+	te := transactionEvidencePool.Get()
+	s := shippingPool.Get()
+	//itemE := itemEPool.Get()
+	//rows := "i.seller_id AS `i.seller_id`, i.buyer_id AS `i.buyer_id`, i.status AS `i.status`, i.name AS `i.name`, i.price AS `i.price`, i.description AS `i.description`, i.image_name AS `i.image_name`, i.category_id AS `i.category_id`, te.id AS `te_id`, te.status AS `te_status`, s.status AS `s_status`"
+	//err = dbx.Get(itemE, "SELECT "+rows+" FROM `items` AS `i` LEFT JOIN `transaction_evidences` AS `te` ON `te`.`item_id` = `i`.`id` LEFT JOIN `shippings` AS `s` ON `s`.`transaction_evidence_id` = `te`.`id` WHERE `i`.`id` = ?", itemID)
+	item := struct {
+		ImageName string `db:"image_name"`
+	}{}
+	err = dbx.Get(&item, "SELECT image_name FROM `items` WHERE `id` = ?", itemID)
 	if err == sql.ErrNoRows {
 		outputErrorMsg(w, http.StatusNotFound, "item not found")
 		return
@@ -1681,15 +1762,56 @@ func getItem(w http.ResponseWriter, r *http.Request) {
 		outputErrorMsg(w, http.StatusInternalServerError, "db error")
 		return
 	}
-	item := itemE.Item
 
-	category, err := getCategoryByID(item.CategoryID)
+	data, err := kvs.Do(1, "GET", itemID+Offset)
+	if data == nil {
+		outputErrorMsg(w, http.StatusNotFound, "item not found")
+		return
+	}
+	if err != nil {
+		log.Print(err)
+		outputErrorMsg(w, http.StatusInternalServerError, "db error")
+		return
+	}
+	buf := bytes.NewBuffer(data.([]byte))
+	if err := gob.NewDecoder(buf).Decode(&te); err != nil {
+		outputErrorMsg(w, http.StatusInternalServerError, "decode error")
+		log.Fatal(err)
+	}
+	data, err = kvs.Do(2, "GET", itemID)
+	if data == nil {
+		outputErrorMsg(w, http.StatusNotFound, "item not found")
+		return
+	}
+	if err != nil {
+		log.Print(err)
+		outputErrorMsg(w, http.StatusInternalServerError, "db error")
+		return
+	}
+	buf.Reset()
+	if err := gob.NewDecoder(buf).Decode(&s); err != nil {
+		outputErrorMsg(w, http.StatusInternalServerError, "decode error")
+		log.Fatal(err)
+	}
+
+	//if err == sql.ErrNoRows {
+	//	outputErrorMsg(w, http.StatusNotFound, "item not found")
+	//	return
+	//}
+	//if err != nil {
+	//	log.Print(err)
+	//	outputErrorMsg(w, http.StatusInternalServerError, "db error")
+	//	return
+	//}
+	//item := itemE.Item
+
+	category, err := getCategoryByID(te.ItemCategoryID)
 	if err != nil {
 		outputErrorMsg(w, http.StatusNotFound, "category not found")
 		return
 	}
 
-	seller, err := getUserSimpleByID(item.SellerID)
+	seller, err := getUserSimpleByID(te.SellerID)
 	if err != nil {
 		outputErrorMsg(w, http.StatusNotFound, "seller not found")
 		return
@@ -1697,45 +1819,47 @@ func getItem(w http.ResponseWriter, r *http.Request) {
 
 	itemDetail := ItemDetail{
 		ID:       itemID,
-		SellerID: item.SellerID,
+		SellerID: te.SellerID,
 		Seller:   &seller,
 		// BuyerID
 		// Buyer
-		Status:      item.Status,
-		Name:        item.Name,
-		Price:       item.Price,
-		Description: item.Description,
+		Status:      s.Status,
+		Name:        te.ItemName,
+		Price:       te.ItemPrice,
+		Description: te.ItemDescription,
 		ImageURL:    getImageURL(item.ImageName),
-		CategoryID:  item.CategoryID,
+		CategoryID:  te.ItemCategoryID,
 		// TransactionEvidenceID
 		// TransactionEvidenceStatus
 		// ShippingStatus
 		Category:  &category,
-		CreatedAt: item.CreatedAt.Unix(),
+		CreatedAt: te.CreatedAt.Unix(),
 	}
 
-	if (userID == item.SellerID || userID == item.BuyerID) && item.BuyerID != 0 {
-		buyer, err := getUserSimpleByID(item.BuyerID)
+	if (userID == te.SellerID || userID == te.BuyerID) && te.BuyerID != 0 {
+		buyer, err := getUserSimpleByID(te.BuyerID)
 		if err != nil {
 			outputErrorMsg(w, http.StatusNotFound, "buyer not found")
 			return
 		}
-		itemDetail.BuyerID = item.BuyerID
+		itemDetail.BuyerID = te.BuyerID
 		itemDetail.Buyer = &buyer
 
-		if itemE.TransactionEvidenceID.Valid && itemE.TransactionEvidenceID.Int64 > 0 {
-			itemDetail.TransactionEvidenceID = itemE.TransactionEvidenceID.Int64
-			itemDetail.TransactionEvidenceStatus = itemE.TransactionEvidenceStatus.String
-			if !itemE.ShippingStatus.Valid {
-				log.Print("db error (shippingStatus is empty)")
-				outputErrorMsg(w, http.StatusInternalServerError, "db error (shippingStatus is empty)")
-				return
-			}
-			itemDetail.ShippingStatus = itemE.ShippingStatus.String
-		}
+		//if itemE.TransactionEvidenceID.Valid && itemE.TransactionEvidenceID.Int64 > 0 {
+		//	itemDetail.TransactionEvidenceID = itemE.TransactionEvidenceID.Int64
+		//	itemDetail.TransactionEvidenceStatus = itemE.TransactionEvidenceStatus.String
+		//	if !itemE.ShippingStatus.Valid {
+		//		log.Print("db error (shippingStatus is empty)")
+		//		outputErrorMsg(w, http.StatusInternalServerError, "db error (shippingStatus is empty)")
+		//		return
+		//	}
+		//	itemDetail.ShippingStatus = itemE.ShippingStatus.String
+		//}
 	}
 
-	itemEPool.Put(itemE)
+	transactionEvidencePool.Put(te)
+	shippingPool.Put(s)
+	//itemEPool.Put(itemE)
 
 	w.Header().Set("Content-Type", "application/json;charset=utf-8")
 	err = gojay.NewEncoder(w).Encode(&itemDetail)
@@ -1846,10 +1970,13 @@ func getQRCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	//TODO: redis
-	teWithS := TEWithS{}
-	err = dbx.Get(&teWithS, "SELECT `te`.`seller_id` AS `seller_id`, `s`.`status` AS `status`, `s`.`img_binary` AS `img_binary` FROM `transaction_evidences` AS `te` JOIN `shippings` AS `s` ON `te`.`id` = `s`.`transaction_evidence_id` WHERE `te`.`id` = ?", transactionEvidenceID)
-	if err == sql.ErrNoRows {
+	//TODO: redis(done)
+	//teWithS := TEWithS{}
+	//err = dbx.Get(&teWithS, "SELECT `te`.`seller_id` AS `seller_id`, `s`.`status` AS `status`, `s`.`img_binary` AS `img_binary` FROM `transaction_evidences` AS `te` JOIN `shippings` AS `s` ON `te`.`id` = `s`.`transaction_evidence_id` WHERE `te`.`id` = ?", transactionEvidenceID)
+	te := transactionEvidencePool.Get()
+	s := shippingPool.Get()
+	data, err := kvs.Do(1, "GET", transactionEvidenceID)
+	if data == nil {
 		outputErrorMsg(w, http.StatusNotFound, "transaction_evidences or shippings not found")
 		return
 	}
@@ -1858,25 +1985,57 @@ func getQRCode(w http.ResponseWriter, r *http.Request) {
 		outputErrorMsg(w, http.StatusInternalServerError, "db error")
 		return
 	}
+	buf := bytes.NewBuffer(data.([]byte))
+	if err := gob.NewDecoder(buf).Decode(&te); err != nil {
+		outputErrorMsg(w, http.StatusInternalServerError, "decode error")
+		log.Fatal(err)
+	}
+	data, err = kvs.Do(2, "GET", transactionEvidenceID)
+	if data == nil {
+		outputErrorMsg(w, http.StatusNotFound, "transaction_evidences or shippings not found")
+		return
+	}
+	if err != nil {
+		log.Print(err)
+		outputErrorMsg(w, http.StatusInternalServerError, "db error")
+		return
+	}
+	buf.Reset()
+	if err := gob.NewDecoder(buf).Decode(&s); err != nil {
+		outputErrorMsg(w, http.StatusInternalServerError, "decode error")
+		log.Fatal(err)
+	}
+	//if err == sql.ErrNoRows {
+	//	outputErrorMsg(w, http.StatusNotFound, "transaction_evidences or shippings not found")
+	//	return
+	//}
+	//if err != nil {
+	//	log.Print(err)
+	//	outputErrorMsg(w, http.StatusInternalServerError, "db error")
+	//	return
+	//}
 
-	if teWithS.SellerID != sellerID {
+	if te.SellerID != sellerID {
 		outputErrorMsg(w, http.StatusForbidden, "権限がありません")
 		return
 	}
 
-	if teWithS.Status != ShippingsStatusWaitPickup && teWithS.Status != ShippingsStatusShipping {
+	if te.Status != ShippingsStatusWaitPickup && s.Status != ShippingsStatusShipping {
 		outputErrorMsg(w, http.StatusForbidden, "qrcode not available")
 		return
 	}
 
-	if len(teWithS.ImgBinary) == 0 {
+	if len(s.ImgBinary) == 0 {
 		outputErrorMsg(w, http.StatusInternalServerError, "empty qrcode image")
 		return
 	}
 
+	transactionEvidencePool.Put(te)
+	shippingPool.Put(s)
+
 	w.Header().Set("Content-Type", "image/png")
 	w.Header().Set("Cache-Control", "max-age=31536000, public")
-	w.Write(teWithS.ImgBinary)
+	w.Write(s.ImgBinary)
 }
 
 type BuyingMutex struct {
@@ -2055,36 +2214,56 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	//TODO: redis
-	result, err := tx.Exec("INSERT INTO `transaction_evidences` (`seller_id`, `buyer_id`, `status`, `item_id`, `item_name`, `item_price`, `item_description`,`item_category_id`,`item_root_category_id`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-		item.SellerID,
-		buyer.ID,
-		TransactionEvidenceStatusWaitShipping,
-		item.ID,
-		item.Name,
-		item.Price,
-		item.Description,
-		category.ID,
-		category.ParentID,
-	)
-	if err != nil {
+	//TODO: redis(done)
+	//result, err := tx.Exec("INSERT INTO `transaction_evidences` (`seller_id`, `buyer_id`, `status`, `item_id`, `item_name`, `item_price`, `item_description`,`item_category_id`,`item_root_category_id`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+	//	item.SellerID,
+	//	buyer.ID,
+	//	TransactionEvidenceStatusWaitShipping,
+	//	item.ID,
+	//	item.Name,
+	//	item.Price,
+	//	item.Description,
+	//	category.ID,
+	//	category.ParentID,
+	//)
+	te := transactionEvidencePool.Get()
+
+	te.ID = NewestTransactionID + 1
+	te.SellerID = item.SellerID
+	te.BuyerID = buyer.ID
+	te.Status = TransactionEvidenceStatusWaitShipping
+	te.ItemID = item.ID
+	te.ItemName = item.Name
+	te.ItemPrice = item.Price
+	te.ItemDescription = item.Description
+	te.ItemCategoryID = category.ID
+	te.ItemRootCategoryID = category.ParentID
+
+	buf := bytes.NewBuffer(nil)
+	if err = gob.NewEncoder(buf).Encode(&te); err != nil {
+		log.Fatal(err)
+	}
+	result, err := kvs.Do(1, "SETNX", buf.Bytes())
+	if err != nil || result == 0 {
 		log.Print(err)
 
 		outputErrorMsg(w, http.StatusInternalServerError, "db error")
-		tx.Rollback()
+		//tx.Rollback()
 		buyingMutexMap.SetFailure(itemID)
 		return
 	}
 
-	transactionEvidenceID, err := result.LastInsertId()
-	if err != nil {
-		log.Print(err)
+	transactionEvidencePool.Put(te)
 
-		outputErrorMsg(w, http.StatusInternalServerError, "db error")
-		tx.Rollback()
-		buyingMutexMap.SetFailure(itemID)
-		return
-	}
+	//transactionEvidenceID, err := result.LastInsertId()
+	//if err != nil {
+	//	log.Print(err)
+	//
+	//	outputErrorMsg(w, http.StatusInternalServerError, "db error")
+	//	tx.Rollback()
+	//	buyingMutexMap.SetFailure(itemID)
+	//	return
+	//}
 
 	_, err = tx.Exec("UPDATE `items` SET `buyer_id` = ?, `status` = ?, `updated_at` = ? WHERE `id` = ?",
 		buyer.ID,
@@ -2188,33 +2367,65 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err = tx.Exec("INSERT INTO `shippings` (`transaction_evidence_id`, `status`, `item_name`, `item_id`, `reserve_id`, `reserve_time`, `to_address`, `to_name`, `from_address`, `from_name`, `img_binary`) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-		transactionEvidenceID,
-		ShippingsStatusInitial,
-		item.Name,
-		item.ID,
-		scr.ReserveID,
-		scr.ReserveTime,
-		buyer.Address,
-		buyer.AccountName,
-		sellar.Address,
-		sellar.AccountName,
-		"",
-	)
-	if err != nil {
+	//TODO: redis(done)
+	//_, err = tx.Exec("INSERT INTO `shippings` (`transaction_evidence_id`, `status`, `item_name`, `item_id`, `reserve_id`, `reserve_time`, `to_address`, `to_name`, `from_address`, `from_name`, `img_binary`) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+	//	transactionEvidenceID,
+	//	ShippingsStatusInitial,
+	//	item.Name,
+	//	item.ID,
+	//	scr.ReserveID,
+	//	scr.ReserveTime,
+	//	buyer.Address,
+	//	buyer.AccountName,
+	//	sellar.Address,
+	//	sellar.AccountName,
+	//	"",
+	//)
+	s := shippingPool.Get()
+
+	s.TransactionEvidenceID = NewestTransactionID + 1
+	s.Status = ShippingsStatusInitial
+	s.ItemName = item.Name
+	s.ItemID = item.ID
+	s.ReserveID = scr.ReserveID
+	s.ReserveTime = scr.ReserveTime
+	s.ToAddress = buyer.Address
+	s.ToName = buyer.AccountName
+	s.FromAddress = sellar.Address
+	s.FromName = sellar.AccountName
+
+	buf.Reset()
+	if err = gob.NewEncoder(buf).Encode(&s); err != nil {
+		log.Fatal(err)
+	}
+	result, err = kvs.Do(2, "SETNX", buf.Bytes())
+	if err != nil || result == 0 {
 		log.Print(err)
 
 		outputErrorMsg(w, http.StatusInternalServerError, "db error")
-		tx.Rollback()
+		//tx.Rollback()
 		buyingMutexMap.SetFailure(itemID)
 		return
 	}
+
+	shippingPool.Put(s)
+
+	//if err != nil {
+	//	log.Print(err)
+	//
+	//	outputErrorMsg(w, http.StatusInternalServerError, "db error")
+	//	tx.Rollback()
+	//	buyingMutexMap.SetFailure(itemID)
+	//	return
+	//}
 
 	tx.Commit()
 	buyingMutexMap.SetSuccess(itemID)
 
 	w.Header().Set("Content-Type", "application/json;charset=utf-8")
-	json.NewEncoder(w).Encode(resBuy{TransactionEvidenceID: transactionEvidenceID})
+	json.NewEncoder(w).Encode(resBuy{TransactionEvidenceID: NewestTransactionID})
+
+	NewestTransactionID += 1
 }
 
 type TeShip struct {
@@ -2288,14 +2499,14 @@ func postShip(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	//TODO: redis
+	//TODO: redis(done)
 	//_, err = tx.Exec("UPDATE `shippings` SET `status` = ?, `img_binary` = ?, `updated_at` = ? WHERE `transaction_evidence_id` = ?",
 	//	ShippingsStatusWaitPickup,
 	//	img,
 	//	time.Now(),
 	//	teShip.TeID,
 	//)
-	shipping := Shipping{}
+	shipping := shippingPool.Get()
 	data, err := kvs.Do(2, "GET", teShip.TeID)
 	// dataがnilかチェックしてない
 	buf := bytes.NewBuffer(data.([]byte))
@@ -2319,7 +2530,8 @@ func postShip(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tx.Commit()
+	shippingPool.Put(shipping)
+	//tx.Commit()
 
 	rps := resPostShip{
 		Path:      "/transactions/" + strconv.FormatInt(teShip.TeID, 10) + ".png",
@@ -2452,7 +2664,7 @@ func postComplete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	//TODO: redis
+	//TODO: redis(done)
 	tx := dbx.MustBegin()
 	transactionEvidence := TransactionEvidence{}
 	//err = tx.Get(&transactionEvidence, "SELECT id, buyer_id, status FROM `transaction_evidences` WHERE `item_id` = ? FOR UPDATE", itemID)
@@ -2461,7 +2673,7 @@ func postComplete(w http.ResponseWriter, r *http.Request) {
 	//	tx.Rollback()
 	//	return
 	//}
-	data, err := kvs.Do(1, "GET", itemID)
+	data, err := kvs.Do(1, "GET", itemID+Offset)
 	if data == nil {
 		outputErrorMsg(w, http.StatusNotFound, "transaction_evidences not found")
 		return
