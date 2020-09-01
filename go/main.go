@@ -148,6 +148,7 @@ func (k *KVS) Do(db int, commandName string, args ...interface{}) (interface{}, 
 
 func getTEfromItemIDs(ids []int64) ([]TransactionEvidence, error) {
 	for _, id := range ids {
+		log.Printf("IDs: %d", id)
 		if err := kvs.Send(3, "GET", id); err != nil {
 			return nil, err
 		}
@@ -1759,6 +1760,7 @@ func getItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	log.Printf("getItem: %d", itemID)
 	data, err := kvs.Do(3, "GET", itemID)
 	if data == nil {
 		outputErrorMsg(w, http.StatusNotFound, "item not found")
@@ -2473,6 +2475,7 @@ func postShip(w http.ResponseWriter, r *http.Request) {
 	//}
 	te := transactionEvidencePool.Get()
 	s := shippingPool.Get()
+	log.Printf("postShip: %d", itemID)
 	data, err := kvs.Do(3, "GET", itemID)
 	if data == nil {
 		outputErrorMsg(w, http.StatusNotFound, "transaction_evidences or shippings not found")
@@ -2619,6 +2622,7 @@ func postShipDone(w http.ResponseWriter, r *http.Request) {
 	//}
 	te := transactionEvidencePool.Get()
 	s := shippingPool.Get()
+	log.Printf("postShipDone: %d", itemID)
 	data, err := kvs.Do(3, "GET", itemID)
 	if data == nil {
 		outputErrorMsg(w, http.StatusNotFound, "transaction_evidences or shippings not found")
@@ -2788,6 +2792,7 @@ func postComplete(w http.ResponseWriter, r *http.Request) {
 	//	tx.Rollback()
 	//	return
 	//}
+	log.Printf("postComplete: %d", itemID)
 	data, err := kvs.Do(3, "GET", itemID)
 	if data == nil {
 		outputErrorMsg(w, http.StatusNotFound, "transaction_evidences not found")
