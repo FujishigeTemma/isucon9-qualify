@@ -88,80 +88,93 @@ var (
 	NewestTransactionID int64
 )
 
+func NewRedisConnPool(db int, addr string) *redis.Pool {
+	return &redis.Pool{
+		MaxIdle:     512,
+		MaxActive:   512,
+		IdleTimeout: 240 * time.Second,
+		Dial: func() (redis.Conn, error) {
+			return redis.Dial("tcp", addr, redis.DialPassword("isucari"), redis.DialDatabase(db))
+		},
+	}
+}
+
 type KVS struct {
-	te  redis.Conn
-	s   redis.Conn
-	te2 redis.Conn
+	te  *redis.Pool
+	s   *redis.Pool
+	te2 *redis.Pool
 }
 
 func (k *KVS) Send(db int, commandName string, args ...interface{}) error {
+	var conn redis.Conn
 	switch db {
 	case 1:
-		return k.te.Send(commandName, args...)
+		conn = kvs.te.Get()
+		defer conn.Close()
 	case 2:
-		return k.s.Send(commandName, args...)
+		conn = kvs.s.Get()
+		defer conn.Close()
 	case 3:
-		return k.te2.Send(commandName, args...)
+		conn = kvs.te2.Get()
+		defer conn.Close()
 	default:
 		return fmt.Errorf("invalid db")
 	}
+	return conn.Send(commandName, args...)
 }
 
 func (k *KVS) Flush(db int) error {
+	var conn redis.Conn
 	switch db {
 	case 1:
-		return k.te.Flush()
+		conn = kvs.te.Get()
+		defer conn.Close()
 	case 2:
-		return k.s.Flush()
+		conn = kvs.s.Get()
+		defer conn.Close()
 	case 3:
-		return k.te2.Flush()
+		conn = kvs.te2.Get()
+		defer conn.Close()
 	default:
 		return fmt.Errorf("invalid db")
 	}
+	return conn.Flush()
 }
 
 func (k *KVS) Receive(db int) (interface{}, error) {
+	var conn redis.Conn
 	switch db {
 	case 1:
-		return k.te.Receive()
+		conn = kvs.te.Get()
+		defer conn.Close()
 	case 2:
-		return k.s.Receive()
+		conn = kvs.s.Get()
+		defer conn.Close()
 	case 3:
-		return k.te2.Receive()
+		conn = kvs.te2.Get()
+		defer conn.Close()
 	default:
 		return nil, fmt.Errorf("invalid db")
 	}
+	return conn.Receive()
 }
 
 func (k *KVS) Do(db int, commandName string, args ...interface{}) (interface{}, error) {
+	var conn redis.Conn
 	switch db {
 	case 1:
-		if err := k.te.Send(commandName, args); err != nil {
-			return nil, err
-		}
-		if err := k.te.Flush(); err != nil {
-			return nil, err
-		}
-		return k.te.Receive()
+		conn = kvs.te.Get()
+		defer conn.Close()
 	case 2:
-		if err := k.s.Send(commandName, args); err != nil {
-			return nil, err
-		}
-		if err := k.s.Flush(); err != nil {
-			return nil, err
-		}
-		return k.s.Receive()
+		conn = kvs.s.Get()
+		defer conn.Close()
 	case 3:
-		if err := k.te2.Send(commandName, args); err != nil {
-			return nil, err
-		}
-		if err := k.te2.Flush(); err != nil {
-			return nil, err
-		}
-		return k.te2.Receive()
+		conn = kvs.te2.Get()
+		defer conn.Close()
 	default:
 		return nil, fmt.Errorf("invalid db")
 	}
+	return conn.Do(commandName, args...)
 }
 
 func getTEfromItemIDs(ids []int64) ([]TransactionEvidence, error) {
@@ -222,7 +235,9 @@ func getSfromIDs(ids []int64) ([]Shipping, error) {
 }
 
 func migrateFromMySQLtoRedis() {
-	reply, err := kvs.te.Do("FLUSHALL")
+	conn := kvs.te.Get()
+	defer conn.Close()
+	reply, err := conn.Do("FLUSHALL")
 	if err != nil {
 		log.Print(reply)
 		log.Fatal(err)
@@ -796,32 +811,13 @@ func main() {
 	http.DefaultClient.Timeout = 5 * time.Second
 
 	const Addr = "172.16.0.163:6379"
-	conn, err := redis.Dial("tcp", Addr,
-		redis.DialPassword("isucari"),
-		redis.DialDatabase(1),
-	)
-	if err != nil {
-		log.Fatal(err)
-	}
-	kvs.te = conn
+	kvs.te = NewRedisConnPool(1, Addr)
 	defer kvs.te.Close()
-	conn, err = redis.Dial("tcp", Addr,
-		redis.DialPassword("isucari"),
-		redis.DialDatabase(2),
-	)
-	if err != nil {
-		log.Fatal(err)
-	}
-	kvs.s = conn
+
+	kvs.s = NewRedisConnPool(2, Addr)
 	defer kvs.s.Close()
-	conn, err = redis.Dial("tcp", Addr,
-		redis.DialPassword("isucari"),
-		redis.DialDatabase(3),
-	)
-	if err != nil {
-		log.Fatal(err)
-	}
-	kvs.te2 = conn
+
+	kvs.te2 = NewRedisConnPool(3, Addr)
 	defer kvs.te2.Close()
 
 	migrateFromMySQLtoRedis()
