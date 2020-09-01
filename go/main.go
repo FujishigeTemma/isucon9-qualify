@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -570,7 +571,15 @@ func main() {
 	mux.HandleFunc(pat.Get("/reports.json"), getReports)
 	mux.Use(coala)
 
-	log.Fatal(http.ListenAndServe(":8000", mux))
+	path := filepath.Join(os.TempDir(), "isucari.sock")
+	os.Remove(path)
+	listener, err := net.Listen("unix", path)
+	if err != nil {
+		panic(err)
+	}
+	defer listener.Close()
+
+	log.Fatal(http.Serve(listener, mux))
 }
 
 func getCSRFToken(r *http.Request) string {
