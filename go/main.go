@@ -156,7 +156,7 @@ func getTEfromItemIDs(ids []int64) ([]TransactionEvidence, error) {
 	if err := kvs.Flush(3); err != nil {
 		return nil, err
 	}
-	tes := make([]TransactionEvidence, 0, len(ids))
+	tes := make([]TransactionEvidence, 0)
 	for i := 0; i < len(ids); i++ {
 		var te TransactionEvidence
 		data, err := kvs.Receive(3)
@@ -1489,7 +1489,7 @@ func getTransactionAdditions(tx *sqlx.Tx, w http.ResponseWriter, itemIDs []int64
 	//}
 	//query = dbx.Rebind(query)
 
-	tas := make([]TransactionAdditions, 0, len(itemIDs))
+	tas := make([]TransactionAdditions, 0)
 	//err = sqlx.Select(tx, &
 	tes, err := getTEfromItemIDs(itemIDs)
 	if err != nil {
