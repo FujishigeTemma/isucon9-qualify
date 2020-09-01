@@ -136,11 +136,29 @@ func (k *KVS) Receive(db int) (interface{}, error) {
 func (k *KVS) Do(db int, commandName string, args ...interface{}) (interface{}, error) {
 	switch db {
 	case 1:
-		return k.te.Do(commandName, args)
+		if err := k.te.Send(commandName, args); err != nil {
+			return nil, err
+		}
+		if err := k.te.Flush(); err != nil {
+			return nil, err
+		}
+		return k.te.Receive()
 	case 2:
-		return k.s.Do(commandName, args)
+		if err := k.s.Send(commandName, args); err != nil {
+			return nil, err
+		}
+		if err := k.s.Flush(); err != nil {
+			return nil, err
+		}
+		return k.s.Receive()
 	case 3:
-		return k.te2.Do(commandName, args)
+		if err := k.te2.Send(commandName, args); err != nil {
+			return nil, err
+		}
+		if err := k.te2.Flush(); err != nil {
+			return nil, err
+		}
+		return k.te2.Receive()
 	default:
 		return nil, fmt.Errorf("invalid db")
 	}
