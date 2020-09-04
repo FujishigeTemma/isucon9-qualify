@@ -118,18 +118,6 @@ func (k *KVS) Get(db int) redis.Conn {
 	}
 }
 
-func (k *KVS) Send(conn redis.Conn, commandName string, args ...interface{}) error {
-	return conn.Send(commandName, args...)
-}
-
-func (k *KVS) Flush(conn redis.Conn) error {
-	return conn.Flush()
-}
-
-func (k *KVS) Receive(conn redis.Conn) (interface{}, error) {
-	return conn.Receive()
-}
-
 func (k *KVS) Do(db int, commandName string, args ...interface{}) (interface{}, error) {
 	var conn redis.Conn
 	switch db {
@@ -153,17 +141,17 @@ func getTEfromItemIDs(ids []int64) ([]TransactionEvidence, error) {
 	defer conn.Close()
 	for _, id := range ids {
 		log.Printf("IDs: %d", id)
-		if err := kvs.Send(conn, "GET", id); err != nil {
+		if err := conn.Send("GET", id); err != nil {
 			return nil, err
 		}
 	}
-	if err := kvs.Flush(conn); err != nil {
+	if err := conn.Flush(); err != nil {
 		return nil, err
 	}
 	tes := make([]TransactionEvidence, 0)
 	for i := 0; i < len(ids); i++ {
 		var te TransactionEvidence
-		data, err := kvs.Receive(conn)
+		data, err := conn.Receive()
 		if err != nil {
 			return nil, err
 		}
@@ -183,17 +171,17 @@ func getSfromIDs(ids []int64) ([]Shipping, error) {
 	conn := kvs.Get(2)
 	defer conn.Close()
 	for _, id := range ids {
-		if err := kvs.Send(conn, "GET", id); err != nil {
+		if err := conn.Send("GET", id); err != nil {
 			return nil, err
 		}
 	}
-	if err := kvs.Flush(conn); err != nil {
+	if err := conn.Flush(); err != nil {
 		return nil, err
 	}
 	shippings := make([]Shipping, 0, len(ids))
 	for i := 0; i < len(ids); i++ {
 		var s Shipping
-		data, err := kvs.Receive(conn)
+		data, err := conn.Receive()
 		if err != nil {
 			return nil, err
 		}
@@ -236,25 +224,25 @@ func migrateFromMySQLtoRedis() {
 		if err := gob.NewEncoder(buf).Encode(&evidence); err != nil {
 			log.Fatal(err)
 		}
-		if err := kvs.Send(conn1, "SET", evidence.ID, buf.Bytes()); err != nil {
+		if err := conn1.Send("SET", evidence.ID, buf.Bytes()); err != nil {
 			log.Fatal(err)
 		}
-		if err := kvs.Send(conn3, "SET", evidence.ItemID, buf.Bytes()); err != nil {
+		if err := conn3.Send("SET", evidence.ItemID, buf.Bytes()); err != nil {
 			log.Fatal(err)
 		}
 	}
-	if err := kvs.Flush(conn1); err != nil {
+	if err := conn1.Flush(); err != nil {
 		log.Fatal(err)
 	}
-	if err := kvs.Flush(conn3); err != nil {
+	if err := conn3.Flush(); err != nil {
 		log.Fatal(err)
 	}
 	for i := 0; i < len(transactionEvidences); i++ {
-		if reply, err := kvs.Receive(conn1); err != nil {
+		if reply, err := conn1.Receive(); err != nil {
 			log.Print(reply)
 			log.Fatal(err)
 		}
-		if reply, err := kvs.Receive(conn3); err != nil {
+		if reply, err := conn3.Receive(); err != nil {
 			log.Print(reply)
 			log.Fatal(err)
 		}
@@ -272,15 +260,15 @@ func migrateFromMySQLtoRedis() {
 		if err := gob.NewEncoder(buf).Encode(&shipping); err != nil {
 			log.Fatal(err)
 		}
-		if err := kvs.Send(conn2, "SET", shipping.TransactionEvidenceID, buf.Bytes()); err != nil {
+		if err := conn2.Send("SET", shipping.TransactionEvidenceID, buf.Bytes()); err != nil {
 			log.Fatal(err)
 		}
 	}
-	if err := kvs.Flush(conn2); err != nil {
+	if err := conn2.Flush(); err != nil {
 		log.Fatal(err)
 	}
 	for i := 0; i < len(shippings); i++ {
-		if reply, err := kvs.Receive(conn2); err != nil {
+		if reply, err := conn2.Receive(); err != nil {
 			log.Print(reply)
 			log.Fatal(err)
 		}
@@ -3289,20 +3277,20 @@ func getReports(w http.ResponseWriter, r *http.Request) {
 	conn := kvs.Get(1)
 	defer conn.Close()
 	for i := 0; i < 3000; i++ {
-		if err := kvs.Send(conn, "GET", 15008+i); err != nil {
+		if err := conn.Send("GET", 15008+i); err != nil {
 			log.Print(err)
 			outputErrorMsg(w, http.StatusInternalServerError, "db error")
 			return
 		}
 	}
-	if err := kvs.Flush(conn); err != nil {
+	if err := conn.Flush(); err != nil {
 		log.Print(err)
 		outputErrorMsg(w, http.StatusInternalServerError, "db error")
 		return
 	}
 	buf := bytes.NewBuffer(nil)
 	for i := 0; i < len(transactionEvidences); i++ {
-		data, err := kvs.Receive(conn)
+		data, err := conn.Receive()
 		if err != nil {
 			log.Print(err)
 			outputErrorMsg(w, http.StatusInternalServerError, "db error")
